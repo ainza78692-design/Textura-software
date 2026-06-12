@@ -20,10 +20,11 @@ concurrency:
 
 env:
   NODE_VERSION: "22"
+  PROJECT_DIR: textura-erp-web-source
 
 jobs:
   validate:
-    name: Validate and package
+    name: Validate and package backend
     runs-on: windows-latest
     timeout-minutes: 30
 
@@ -36,24 +37,20 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            backend/package-lock.json
+          cache-dependency-path: ${{ env.PROJECT_DIR }}/backend/package-lock.json
 
       - name: Install locked backend dependencies
         shell: powershell
-        run: |
-          npm --prefix backend ci
+        run: npm --prefix "${{ env.PROJECT_DIR }}\backend" ci
 
       - name: Audit backend production dependencies
         shell: powershell
-        run: |
-          npm --prefix backend audit --omit=dev --audit-level=critical
+        run: npm --prefix "${{ env.PROJECT_DIR }}\backend" audit --omit=dev --audit-level=critical
 
       - name: Run backend tests
         shell: powershell
         run: |
-          Push-Location backend
+          Push-Location "${{ env.PROJECT_DIR }}\backend"
           npm test
           Pop-Location
 
@@ -62,6 +59,7 @@ jobs:
         shell: powershell
         run: |
           $releaseId = "${{ github.sha }}".Substring(0, 12)
+          $projectDir = "${{ env.PROJECT_DIR }}"
           $stage = Join-Path $env:RUNNER_TEMP "textura-release"
           $archive = Join-Path $env:RUNNER_TEMP "textura-server-$releaseId.zip"
 
@@ -69,9 +67,9 @@ jobs:
             (Join-Path $stage "backend"), `
             (Join-Path $stage "database") | Out-Null
 
-          Copy-Item backend\package.json,backend\package-lock.json -Destination (Join-Path $stage "backend")
-          Copy-Item backend\dist -Destination (Join-Path $stage "backend\dist") -Recurse
-          Copy-Item database\migrations -Destination (Join-Path $stage "database\migrations") -Recurse
+          Copy-Item "$projectDir\backend\package.json","$projectDir\backend\package-lock.json" -Destination (Join-Path $stage "backend")
+          Copy-Item "$projectDir\backend\dist" -Destination (Join-Path $stage "backend\dist") -Recurse
+          Copy-Item "$projectDir\database\migrations" -Destination (Join-Path $stage "database\migrations") -Recurse
 
           [ordered]@{
             releaseId = $releaseId
@@ -85,7 +83,7 @@ jobs:
           "release_id=$releaseId" >> $env:GITHUB_OUTPUT
           "archive=$archive" >> $env:GITHUB_OUTPUT
 
-      - name: Upload server release
+      - name: Upload backend server release
         uses: actions/upload-artifact@v4
         with:
           name: textura-server-${{ github.sha }}
@@ -107,14 +105,14 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Checkout deployment tooling
+      - name: Checkout deployment tooling only
         uses: actions/checkout@v4
         with:
           sparse-checkout: |
-            ops/windows
+            textura-erp-web-source/ops/windows
           sparse-checkout-cone-mode: true
 
-      - name: Download validated release
+      - name: Download validated backend release
         uses: actions/download-artifact@v4
         with:
           name: textura-server-${{ github.sha }}
@@ -143,7 +141,7 @@ jobs:
           if (-not $healthUrl) { $healthUrl = "http://127.0.0.1:4000/health/ready" }
           $releaseId = "${{ github.sha }}".Substring(0, 12)
 
-          .\ops\windows\deploy-production.ps1 `
+          .\${{ env.PROJECT_DIR }}\ops\windows\deploy-production.ps1 `
             -ArtifactPath "${{ steps.artifact.outputs.archive }}" `
             -ReleaseId $releaseId `
             -InstallRoot $installRoot `
