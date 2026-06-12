@@ -2,7 +2,7 @@
 
 ## Repository Findings
 
-Textura is a Windows-oriented client/server application:
+Textura is a client/server application. The current company server is Linux/Ubuntu:
 
 - The active client is the root React 19 application in `src/`, using TanStack Router,
   TanStack Query, Vite, Tailwind CSS 4, Radix UI, and Excel import/export.
@@ -39,38 +39,36 @@ separate private process that you explicitly approve later. This workflow packag
 - `backend/package-lock.json`,
 - `database/migrations`.
 
-The production self-hosted runner uses sparse checkout for `ops/windows` only. The server runner
+The production self-hosted runner uses sparse checkout for `ops/linux` only. The server runner
 does not receive the full frontend/Electron source tree from the deploy job, and the release ZIP
 does not contain client assets.
 
 ## Selected Deployment Architecture
 
-Production uses blue-green backend deployment on one Windows company server:
+Production uses blue-green backend deployment on one Linux company server:
 
 ```text
 Electron clients
   -> stable server URL :4000
-  -> Caddy service: TexturaProxy
-       -> blue API service:  TexturaBackendBlue  on 127.0.0.1:4101
-       -> green API service: TexturaBackendGreen on 127.0.0.1:4102
+  -> Nginx
+       -> blue API service:  textura-backend@blue  on 127.0.0.1:4101
+       -> green API service: textura-backend@green on 127.0.0.1:4102
   -> PostgreSQL on localhost:5432
 ```
 
-Caddy is selected because it provides a stable endpoint and atomic configuration reloads on
-Windows without introducing Docker. NSSM manages Caddy and both Node.js backend slots as Windows
-services.
+Nginx is selected because it is standard on Ubuntu and supports fast config reloads without
+Docker. systemd manages both Node.js backend slots.
 
 Each deployment installs into a new immutable directory:
 
 ```text
-D:\Textura\
-  config\backend.env
-  releases\<commit>\
-  state\deployment.json
-  proxy\Caddyfile
-  proxy\active-backend.caddy
-  backups\
-  logs\
+/opt/textura/
+  config/backend.env
+  releases/<commit>/
+  state/deployment.json
+  proxy/active-upstream.conf
+  backups/
+  logs/
 ```
 
 Configuration, PostgreSQL data, backups, and logs are outside release directories and survive every
@@ -85,9 +83,9 @@ The deployment script:
 3. Installs production-only backend dependencies.
 4. Creates and verifies a predeploy PostgreSQL backup.
 5. Applies pending tracked migrations.
-6. Configures and starts the inactive NSSM slot.
+6. Configures and starts the inactive systemd slot.
 7. Checks the inactive slot directly through `/health/ready`.
-8. Atomically changes Caddy to the healthy slot and reloads Caddy.
+8. Atomically changes Nginx to the healthy slot and reloads Nginx.
 9. Verifies the public endpoint returns the expected release and slot.
 10. Keeps the previous slot alive for a drain period, then stops only that old slot.
 
@@ -101,8 +99,8 @@ The active slot is not stopped until the new slot passes both direct and public 
 If public verification fails after cutover, the deployment script:
 
 - starts or retains the previous service,
-- rewrites the Caddy upstream to the previous slot,
-- reloads Caddy,
+- rewrites the Nginx upstream to the previous slot,
+- reloads Nginx,
 - verifies the restored public health endpoint,
 - stops the failed new slot,
 - fails the GitHub Actions job.
@@ -160,7 +158,7 @@ Repository or environment variables:
 
 | Variable | Required | Example |
 | --- | --- | --- |
-| `TEXTURA_INSTALL_ROOT` | No | `D:\Textura` |
+| `TEXTURA_INSTALL_ROOT` | No | `/opt/textura` |
 | `TEXTURA_PUBLIC_HEALTH_URL` | No | `http://127.0.0.1:4000/health/ready` |
 
 GitHub secrets:
@@ -170,7 +168,7 @@ GitHub secrets:
 | `TEXTURA_DEPLOY_WEBHOOK_URL` | No | Teams/Slack-compatible deployment notification webhook |
 
 Database passwords and JWT secrets are deliberately not GitHub Secrets in this design. They remain
-only in `D:\Textura\config\backend.env` on the server. This reduces credential movement through CI
+only in `/opt/textura/config/backend.env` on the server. This reduces credential movement through CI
 and prevents releases from overwriting production configuration.
 
 No Electron signing, installer publishing, or desktop release secret is required for this backend
@@ -182,29 +180,29 @@ Install the GitHub Actions runner on the production server with labels:
 
 ```text
 self-hosted
-windows
+linux
 x64
 textura-production
 ```
 
 Runner requirements:
 
-- Windows Server 2022 or 2025.
+- Ubuntu/Linux server with systemd.
 - Node.js 22 LTS and npm in system `PATH`.
 - PostgreSQL client tools (`psql`, `pg_dump`, `pg_restore`) in system `PATH`.
-- Caddy and NSSM installed in the paths used by the scripts.
+- Nginx installed.
 - Network access to GitHub Actions and the npm registry.
-- Write permission to `D:\Textura`.
-- Permission to control `TexturaBackendBlue`, `TexturaBackendGreen`, and `TexturaProxy`.
+- Write permission to `/opt/textura`.
+- Passwordless sudo permission for the deployment script to manage Nginx and
+  `textura-backend@blue/green`.
 - No interactive user login dependency.
 
-Run the runner as a dedicated Windows service account, not an administrator's personal account.
+Run the runner as a dedicated Linux service account, not a personal login account.
 Grant only the filesystem and service-control permissions required above. Restrict RDP access to
 Tailscale/VPN administrators.
 
-The Administrator bootstrap creates the three service identities. The runner account should be
-allowed to query/reconfigure/start/stop only those services; it does not need general permission
-to create arbitrary Windows services.
+The root bootstrap creates the systemd service template and Nginx configuration. The runner user
+should not have broad root access beyond the commands required by `/opt/textura/app/.../ops/linux`.
 
 Do not install a runner from an untrusted public repository on the production server. Pull-request
 jobs use GitHub-hosted runners; only the protected production deployment job reaches the
@@ -216,27 +214,36 @@ Install:
 
 - Node.js 22 LTS
 - PostgreSQL 16 or 17 client/server tools
-- NSSM under `C:\Program Files\nssm\win64\nssm.exe`
-- Caddy under `C:\Program Files\Caddy\caddy.exe`
-- GitHub Actions runner as a Windows service
+- Nginx
+- GitHub Actions runner as a systemd service
 
-Add PostgreSQL's `bin` directory to the system `PATH`.
+Example Ubuntu install:
 
-From an Administrator PowerShell:
-
-```powershell
-Set-ExecutionPolicy RemoteSigned -Scope LocalMachine
-cd D:\Textura\bootstrap-repository
-.\ops\windows\install-blue-green.ps1 -InstallRoot D:\Textura -StopLegacyBackend
+```bash
+sudo apt update
+sudo apt install -y git nginx postgresql-client unzip
 ```
 
-`-StopLegacyBackend` is needed only for the one-time transition from a backend directly occupying
-port 4000. Future deployments are zero-downtime.
+Clone the repo once:
+
+```bash
+sudo mkdir -p /opt/textura
+sudo chown -R yes_fashion:yes_fashion /opt/textura
+cd /opt/textura
+git clone https://github.com/ainza78692-design/Textura-software.git app
+```
+
+Run one-time setup:
+
+```bash
+cd /opt/textura/app
+sudo bash textura-erp-web-source/ops/linux/install-blue-green.sh
+```
 
 Edit:
 
 ```text
-D:\Textura\config\backend.env
+/opt/textura/config/backend.env
 ```
 
 Required production values:
@@ -256,26 +263,21 @@ JWT_EXPIRES_IN=8h
 BOOTSTRAP_ADMIN_ENABLED=false
 ```
 
-Restrict the file ACL to Administrators and the backend/runner service accounts:
+Restrict the file permissions:
 
-```powershell
-icacls D:\Textura\config\backend.env /inheritance:r
-icacls D:\Textura\config\backend.env /grant:r `
-  "Administrators:(F)" `
-  "SYSTEM:(F)" `
-  "DOMAIN\TexturaService:(R)"
+```bash
+sudo chown textura:textura /opt/textura/config/backend.env
+sudo chmod 640 /opt/textura/config/backend.env
 ```
-
-Replace `DOMAIN\TexturaService` with the actual service identity.
 
 For a database that existed before `schema_migrations`, verify its schema matches all current SQL
 files, then run exactly once:
 
-```powershell
-.\ops\windows\run-migrations.ps1 `
-  -AppDir D:\Textura\bootstrap-repository `
-  -EnvFile D:\Textura\config\backend.env `
-  -BaselineExistingSchema
+```bash
+sudo TEXTURA_BACKEND_ENV=/opt/textura/config/backend.env \
+  bash /opt/textura/app/textura-erp-web-source/ops/linux/run-migrations.sh \
+  --app-dir /opt/textura/app/textura-erp-web-source \
+  --baseline-existing-schema
 ```
 
 New empty databases do not require baselining.
@@ -285,13 +287,14 @@ New empty databases do not require baselining.
 1. Push the reviewed commit to the protected `production` branch.
 2. Approve the protected `production` GitHub Environment deployment.
 3. Confirm the inactive slot becomes healthy.
-4. Confirm `D:\Textura\state\deployment.json` records the active release.
+4. Confirm `/opt/textura/state/deployment.json` records the active release.
 5. Verify:
 
-```powershell
-Invoke-RestMethod http://127.0.0.1:4000/health/live
-Invoke-RestMethod http://127.0.0.1:4000/health/ready
-Get-Service TexturaProxy,TexturaBackendBlue,TexturaBackendGreen
+```bash
+curl -fsS http://127.0.0.1:3000/health/live
+curl -fsS http://127.0.0.1:3000/health/ready
+systemctl status nginx
+systemctl status textura-backend@blue textura-backend@green
 ```
 
 Only one backend slot is expected to remain running after the drain period.
@@ -301,15 +304,14 @@ Only one backend slot is expected to remain running after the drain period.
 Server logs:
 
 ```text
-D:\Textura\logs\deploy\deploy-*.log
-D:\Textura\logs\deploy\deploy-*.json
-D:\Textura\logs\backend\blue-stdout.log
-D:\Textura\logs\backend\blue-stderr.log
-D:\Textura\logs\backend\green-stdout.log
-D:\Textura\logs\backend\green-stderr.log
-D:\Textura\logs\caddy\access.json
-D:\Textura\logs\caddy\service-stdout.log
-D:\Textura\logs\caddy\service-stderr.log
+/opt/textura/logs/deploy/deploy-*.log
+/opt/textura/logs/deploy/deploy-*.json
+/opt/textura/logs/backend/blue-stdout.log
+/opt/textura/logs/backend/blue-stderr.log
+/opt/textura/logs/backend/green-stdout.log
+/opt/textura/logs/backend/green-stderr.log
+/opt/textura/logs/nginx-access.log
+/opt/textura/logs/nginx-error.log
 ```
 
 GitHub retains the deployment transcript/result files for 30 days.
@@ -320,14 +322,14 @@ Minimum production monitoring:
 
 - poll `/health/live` every minute,
 - poll `/health/ready` every minute and alert after two consecutive failures,
-- monitor `TexturaProxy` and the active backend Windows service,
+- monitor Nginx and the active `textura-backend@...` systemd service,
 - monitor PostgreSQL service state,
 - alert below 20% free disk on app, database, and backup volumes,
 - alert on missing daily backup or failed backup transcript,
-- centralize Caddy and Pino logs,
-- track API latency and HTTP 5xx rate from Caddy JSON logs,
+- centralize Nginx and Pino logs,
+- track API latency and HTTP 5xx rate from Nginx logs,
 - perform a quarterly restore drill.
 
 Recommended tools are an existing company monitoring platform, or Prometheus/Grafana with a
-Windows exporter and a log collector such as Grafana Alloy/Promtail. Keep monitoring agents
+node exporter and a log collector such as Grafana Alloy/Promtail. Keep monitoring agents
 separate from the application release directories.
