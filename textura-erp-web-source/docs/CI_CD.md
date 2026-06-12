@@ -1,5 +1,7 @@
 # Production CI/CD
 
+Pipeline smoke-test marker: 2026-06-12.
+
 ## Repository Findings
 
 Textura is a client/server application. The current company server is Linux/Ubuntu:
