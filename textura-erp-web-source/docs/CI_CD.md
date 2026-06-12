@@ -1,6 +1,6 @@
 # Production CI/CD
 
-Pipeline smoke-test marker: 2026-06-12.
+Pipeline smoke-test marker: 2026-06-12 run 2.
 
 ## Repository Findings
 
