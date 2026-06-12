@@ -1,0 +1,25 @@
+{
+  admin 127.0.0.1:2019
+}
+
+:4000 {
+  encode zstd gzip
+
+  header {
+    -Server
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+    Referrer-Policy "no-referrer"
+  }
+
+  import "D:\Textura\proxy\active-backend.caddy"
+
+  log {
+    output file "D:\Textura\logs\caddy\access.json" {
+      roll_size 50MiB
+      roll_keep 10
+      roll_keep_for 720h
+    }
+    format json
+  }
+}

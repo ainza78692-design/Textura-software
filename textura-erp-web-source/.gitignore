@@ -1,0 +1,43 @@
+# Logs
+logs
+*.log
+backups/
+archive/
+rollback/
+updates/
+ops/logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+backend/dist
+dist-ssr
+release
+src-tauri/target/
+.output
+.vinxi
+.tanstack/**
+.nitro
+*.local
+.env
+.env.*
+!.env.example
+
+# Wrangler / Cloudflare
+.wrangler/
+.dev.vars
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

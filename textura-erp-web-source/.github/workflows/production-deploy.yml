@@ -1,0 +1,199 @@
+name: Textura CI and production deployment
+
+on:
+  pull_request:
+    branches:
+      - main
+      - production
+  push:
+    branches:
+      - main
+      - production
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: textura-production-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  validate:
+    name: Validate and package
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Configure Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+
+      - name: Install locked backend dependencies
+        shell: powershell
+        run: |
+          npm --prefix backend ci
+
+      - name: Audit backend production dependencies
+        shell: powershell
+        run: |
+          npm --prefix backend audit --omit=dev --audit-level=critical
+
+      - name: Run backend tests
+        shell: powershell
+        run: |
+          Push-Location backend
+          npm test
+          Pop-Location
+
+      - name: Package immutable backend server release
+        id: package
+        shell: powershell
+        run: |
+          $releaseId = "${{ github.sha }}".Substring(0, 12)
+          $stage = Join-Path $env:RUNNER_TEMP "textura-release"
+          $archive = Join-Path $env:RUNNER_TEMP "textura-server-$releaseId.zip"
+
+          New-Item -ItemType Directory -Force -Path `
+            (Join-Path $stage "backend"), `
+            (Join-Path $stage "database") | Out-Null
+
+          Copy-Item backend\package.json,backend\package-lock.json -Destination (Join-Path $stage "backend")
+          Copy-Item backend\dist -Destination (Join-Path $stage "backend\dist") -Recurse
+          Copy-Item database\migrations -Destination (Join-Path $stage "database\migrations") -Recurse
+
+          [ordered]@{
+            releaseId = $releaseId
+            commit = "${{ github.sha }}"
+            repository = "${{ github.repository }}"
+            runId = "${{ github.run_id }}"
+            builtAt = (Get-Date).ToUniversalTime().ToString("o")
+          } | ConvertTo-Json | Set-Content (Join-Path $stage "release.json") -Encoding UTF8
+
+          Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $archive -CompressionLevel Optimal
+          "release_id=$releaseId" >> $env:GITHUB_OUTPUT
+          "archive=$archive" >> $env:GITHUB_OUTPUT
+
+      - name: Upload server release
+        uses: actions/upload-artifact@v4
+        with:
+          name: textura-server-${{ github.sha }}
+          path: ${{ steps.package.outputs.archive }}
+          retention-days: 30
+          if-no-files-found: error
+
+  deploy:
+    name: Blue-green production deployment
+    if: github.ref == 'refs/heads/production' && github.event_name != 'pull_request'
+    needs: validate
+    runs-on:
+      - self-hosted
+      - windows
+      - x64
+      - textura-production
+    environment:
+      name: production
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout deployment tooling
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            ops/windows
+          sparse-checkout-cone-mode: true
+
+      - name: Download validated release
+        uses: actions/download-artifact@v4
+        with:
+          name: textura-server-${{ github.sha }}
+          path: ${{ runner.temp }}\textura-artifact
+
+      - name: Locate release archive
+        id: artifact
+        shell: powershell
+        run: |
+          $archive = Get-ChildItem "${{ runner.temp }}\textura-artifact" -Filter "*.zip" |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $archive) { throw "Validated release archive was not downloaded." }
+          "archive=$archive" >> $env:GITHUB_OUTPUT
+
+      - name: Deploy with health-gated cutover
+        shell: powershell
+        env:
+          TEXTURA_INSTALL_ROOT: ${{ vars.TEXTURA_INSTALL_ROOT }}
+          TEXTURA_PUBLIC_HEALTH_URL: ${{ vars.TEXTURA_PUBLIC_HEALTH_URL }}
+          TEXTURA_DEPLOY_WEBHOOK_URL: ${{ secrets.TEXTURA_DEPLOY_WEBHOOK_URL }}
+        run: |
+          $installRoot = $env:TEXTURA_INSTALL_ROOT
+          if (-not $installRoot) { $installRoot = "D:\Textura" }
+
+          $healthUrl = $env:TEXTURA_PUBLIC_HEALTH_URL
+          if (-not $healthUrl) { $healthUrl = "http://127.0.0.1:4000/health/ready" }
+          $releaseId = "${{ github.sha }}".Substring(0, 12)
+
+          .\ops\windows\deploy-production.ps1 `
+            -ArtifactPath "${{ steps.artifact.outputs.archive }}" `
+            -ReleaseId $releaseId `
+            -InstallRoot $installRoot `
+            -PublicHealthUrl $healthUrl
+
+      - name: Collect deployment logs
+        if: always()
+        shell: powershell
+        run: |
+          $installRoot = "${{ vars.TEXTURA_INSTALL_ROOT }}"
+          if (-not $installRoot) { $installRoot = "D:\Textura" }
+          $source = Join-Path $installRoot "logs\deploy"
+          $target = Join-Path $env:RUNNER_TEMP "textura-deployment-logs"
+          New-Item -ItemType Directory -Force -Path $target | Out-Null
+          if (Test-Path $source) {
+            Copy-Item (Join-Path $source "*") -Destination $target -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Upload deployment logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-deploy-logs-${{ github.run_id }}
+          path: ${{ runner.temp }}\textura-deployment-logs
+          retention-days: 30
+          if-no-files-found: warn
+
+  notify:
+    name: Notify deployment result
+    if: always() && github.ref == 'refs/heads/production' && github.event_name != 'pull_request'
+    needs:
+      - validate
+      - deploy
+    runs-on: windows-latest
+
+    steps:
+      - name: Send optional webhook notification
+        shell: powershell
+        env:
+          WEBHOOK_URL: ${{ secrets.TEXTURA_DEPLOY_WEBHOOK_URL }}
+          VALIDATE_RESULT: ${{ needs.validate.result }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
+        run: |
+          if (-not $env:WEBHOOK_URL) {
+            Write-Host "TEXTURA_DEPLOY_WEBHOOK_URL is not configured; skipping notification."
+            exit 0
+          }
+
+          $payload = @{
+            text = "Textura production pipeline: validation=$env:VALIDATE_RESULT, deployment=$env:DEPLOY_RESULT, commit=${{ github.sha }}, run=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } | ConvertTo-Json
+
+          Invoke-RestMethod -Method Post -Uri $env:WEBHOOK_URL -ContentType "application/json" -Body $payload
