@@ -171,6 +171,13 @@ mkdir -p "$RELEASE_PATH"
 unzip -q "$ARTIFACT_PATH" -d "$RELEASE_PATH"
 [[ -f "$RELEASE_PATH/backend/dist/server.js" ]] || { echo "Release missing backend/dist/server.js" >&2; exit 1; }
 
+if [[ -f "$RELEASE_PATH/updates/version.json" ]]; then
+  echo "Deploying update manifest..."
+  mkdir -p "$INSTALL_ROOT/updates"
+  cp "$RELEASE_PATH/updates/version.json" "$INSTALL_ROOT/updates/version.json"
+  chown $APP_USER:$APP_USER "$INSTALL_ROOT/updates/version.json"
+fi
+
 pushd "$RELEASE_PATH/backend" >/dev/null
 npm ci --omit=dev --ignore-scripts
 popd >/dev/null

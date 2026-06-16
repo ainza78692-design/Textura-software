@@ -63,6 +63,10 @@ jobs:
           cp "$project_dir/backend/package.json" "$project_dir/backend/package-lock.json" "$stage/backend/"
           cp -R "$project_dir/backend/dist" "$stage/backend/dist"
           cp -R "$project_dir/database/migrations" "$stage/database/migrations"
+          if [[ -f "$project_dir/updates/version.json" ]]; then
+            mkdir -p "$stage/updates"
+            cp "$project_dir/updates/version.json" "$stage/updates/"
+          fi
 
           cat > "$stage/release.json" <<JSON
           {

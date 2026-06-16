@@ -5,6 +5,7 @@ backups/
 archive/
 rollback/
 updates/
+!updates/version.json
 ops/logs/
 npm-debug.log*
 yarn-debug.log*

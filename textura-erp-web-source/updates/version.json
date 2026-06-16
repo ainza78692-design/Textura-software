@@ -1,0 +1,9 @@
+{
+  "version": "1.0.0",
+  "latestVersion": "1.0.0",
+  "minimumSupportedVersion": "1.0.0",
+  "installerUrl": "http://100.91.86.65:4000/updates/downloads/Textura-Setup.exe",
+  "sha256": "c132c5fcaf1848ee5a1ae7bf9b81842a8739dd9784f787091a608dbd8a6c6c54",
+  "releaseNotesUrl": "http://100.91.86.65:4000/changelog",
+  "mandatory": false
+}
