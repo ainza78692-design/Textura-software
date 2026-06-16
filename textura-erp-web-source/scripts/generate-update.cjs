@@ -51,7 +51,7 @@ async function run() {
     // 4. Construct the version.json payload
     // IMPORTANT: Make sure to replace YOUR_SERVER_DOMAIN with your actual production URL
     const exeFileName = path.basename(exePath);
-    const downloadUrl = `http://100.91.86.65:4000/updates/downloads/${exeFileName}`;
+    const downloadUrl = `/updates/downloads/${exeFileName}`;
 
     const manifest = {
       version: version,
@@ -59,7 +59,7 @@ async function run() {
       minimumSupportedVersion: "1.0.0",
       installerUrl: downloadUrl,
       sha256: hash,
-      releaseNotesUrl: "http://100.91.86.65:4000/changelog", // Adjust if needed
+      releaseNotesUrl: "/changelog", // Adjust if needed
       mandatory: false
     };
 
