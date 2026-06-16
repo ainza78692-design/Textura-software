@@ -4,11 +4,11 @@ on:
   pull_request:
     branches:
       - main
-      - production
+      - beta
   push:
     branches:
       - main
-      - production
+      - beta
   workflow_dispatch:
 
 permissions:
@@ -92,7 +92,7 @@ jobs:
 
   deploy:
     name: Blue-green production deployment
-    if: github.ref == 'refs/heads/production' && github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: validate
     runs-on:
       - self-hosted
@@ -171,7 +171,7 @@ jobs:
 
   notify:
     name: Notify deployment result
-    if: always() && github.ref == 'refs/heads/production' && github.event_name != 'pull_request'
+    if: always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs:
       - validate
       - deploy
