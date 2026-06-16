@@ -1,0 +1,33 @@
+name: Production deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - production
+
+concurrency:
+  group: textura-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy on client server
+    runs-on:
+      - self-hosted
+      - windows
+      - textura-production
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Deploy Textura
+        shell: powershell
+        run: .\ops\windows\deploy-production.ps1 -AppDir "${{ github.workspace }}"

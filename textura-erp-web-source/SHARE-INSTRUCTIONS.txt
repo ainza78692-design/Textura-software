@@ -1,0 +1,37 @@
+﻿Textura ERP source package
+
+This ZIP intentionally excludes generated/private/heavy files:
+- node_modules
+- release / built EXE
+- dist build output
+- .env files
+- local videos, logs, temporary files
+
+Setup commands:
+1. Install frontend/desktop dependencies:
+   npm install
+
+2. Create frontend env:
+   copy .env.example .env
+
+3. Install backend dependencies:
+   cd backend
+   npm install
+   copy .env.example .env
+
+4. Create PostgreSQL database and user matching backend/.env, then from the project root run:
+   psql "postgresql://invoice_app:password@localhost:5432/textile_invoice" -f database/migrations/001_init_schema.sql
+
+5. Run backend:
+   cd backend
+   npm run dev
+
+6. In another terminal, run web frontend from the project root:
+   npm run dev
+
+7. To build the Windows EXE from this same source:
+   npm run desktop:build
+
+Notes:
+- Update DB_PASSWORD and JWT_SECRET before real use.
+- The desktop build output will be created in release/ after running npm run desktop:build.
