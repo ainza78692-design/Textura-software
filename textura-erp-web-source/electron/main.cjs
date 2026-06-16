@@ -54,6 +54,10 @@ ipcMain.handle("updates:check", (_event, serverOrigin) =>
   updater.checkForUpdates(String(serverOrigin || "")),
 );
 
+ipcMain.handle("updates:download", (_event, serverOrigin, manifest) =>
+  updater.downloadAndInstallUpdate(String(serverOrigin || ""), manifest),
+);
+
 app.whenReady().then(() => {
   createWindow();
 

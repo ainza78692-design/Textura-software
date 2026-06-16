@@ -13,19 +13,7 @@ if (!rootElement) {
 
 const router = getRouter();
 
-async function scheduleUpdateChecks() {
-  if (!window.texturaDesktop?.checkForUpdates) return;
 
-  const check = async () => {
-    const serverOrigin = await getServerOrigin();
-    await window.texturaDesktop?.checkForUpdates(serverOrigin);
-  };
-
-  window.setTimeout(() => void check(), 10_000);
-  window.setInterval(() => void check(), 6 * 60 * 60 * 1000);
-}
-
-void scheduleUpdateChecks();
 
 createRoot(rootElement).render(
   <StrictMode>

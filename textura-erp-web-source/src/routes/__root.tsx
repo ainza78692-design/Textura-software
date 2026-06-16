@@ -12,6 +12,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { TopNavbar } from "@/components/top-navbar";
 import { Toaster } from "@/components/ui/sonner";
+import { DesktopUpdatePrompt } from "@/components/desktop-update-prompt";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
@@ -111,6 +112,7 @@ function RootComponent() {
       <TooltipProvider delayDuration={150}>
         <AuthProvider>
           <AuthGate />
+          <DesktopUpdatePrompt />
           <Toaster position="top-right" richColors />
         </AuthProvider>
       </TooltipProvider>

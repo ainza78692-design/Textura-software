@@ -122,29 +122,30 @@ function createUpdater({ app, dialog, shell, isDev = false, fetchJson = defaultF
         manifest.minSupportedVersion &&
         compareVersions(currentVersion, manifest.minSupportedVersion) < 0;
 
-      if (!newerAvailable && !belowMinimum) return { status: "current" };
+      if (!newerAvailable && !belowMinimum) return { status: "current", currentVersion };
 
       const mandatory = Boolean(manifest.mandatory || belowMinimum);
-      const detail = [
-        `Current version: ${currentVersion}`,
-        `Latest version: ${manifest.version}`,
-        manifest.releaseNotes ? `\n${manifest.releaseNotes}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n");
 
-      const prompt = await dialog.showMessageBox({
-        type: mandatory ? "warning" : "info",
-        buttons: mandatory ? ["Install update"] : ["Install update", "Later"],
-        defaultId: 0,
-        cancelId: mandatory ? 0 : 1,
-        title: "New update available",
-        message: "New update available",
-        detail,
-      });
+      return {
+        status: "available",
+        manifest,
+        currentVersion,
+        mandatory,
+      };
+    } catch (error) {
+      await recordFailure(error, manifest);
+      return { status: "error", error: error instanceof Error ? error.message : String(error) };
+    } finally {
+      updateCheckInProgress = false;
+    }
+  }
 
-      if (!mandatory && prompt.response !== 0) return { status: "deferred" };
+  async function downloadAndInstallUpdate(serverOrigin, manifest) {
+    if (!serverOrigin || !manifest?.installerUrl || !manifest?.sha256) {
+      return { status: "error", error: "Invalid update manifest provided." };
+    }
 
+    try {
       const installerUrl = resolveUpdateUrl(serverOrigin, manifest.installerUrl);
       const fileName =
         decodeURIComponent(path.basename(new URL(installerUrl).pathname)) ||
@@ -175,12 +176,10 @@ function createUpdater({ app, dialog, shell, isDev = false, fetchJson = defaultF
         )}`,
       );
       return { status: "error", error: error instanceof Error ? error.message : String(error) };
-    } finally {
-      updateCheckInProgress = false;
     }
   }
 
-  return { checkForUpdates, fetchUpdateManifest };
+  return { checkForUpdates, downloadAndInstallUpdate, fetchUpdateManifest };
 }
 
 module.exports = {
