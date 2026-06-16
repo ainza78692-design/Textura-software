@@ -63,10 +63,10 @@ async function run() {
       mandatory: false
     };
 
-    const manifestPath = path.join(updatesDir, "version.json");
+    const manifestPath = path.join(updatesDir, "latest.json");
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 
-    console.log(`\nSuccess! Generated version.json at: ${manifestPath}`);
+    console.log(`\nSuccess! Generated latest.json at: ${manifestPath}`);
     console.log("-------------------------------------------------");
     console.log("You can now securely SCP these two files to your production server:");
     console.log(`1. ${exePath}`);

@@ -1,9 +1,9 @@
 {
-  "version": "1.0.1",
-  "latestVersion": "1.0.1",
+  "version": "1.0.3",
+  "latestVersion": "1.0.3",
   "minimumSupportedVersion": "1.0.0",
-  "installerUrl": "http://100.91.86.65:4000/updates/downloads/Textura ERP Setup 1.0.1.exe",
-  "sha256": "8b13576fd6f9fa216ed2f953faf30b29d3fabf00517cf382331ebbd95b548445",
+  "installerUrl": "http://100.91.86.65:4000/updates/downloads/Textura ERP Setup 1.0.3.exe",
+  "sha256": "17bc34dd10f40654bbbbf7a47506a5abdce96f88712ffbc1b02473c734be5c3d",
   "releaseNotesUrl": "http://100.91.86.65:4000/changelog",
   "mandatory": false
 }
