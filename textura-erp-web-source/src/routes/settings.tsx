@@ -16,7 +16,7 @@ function Settings() {
   const { signOut } = useAuth();
 
   return (
-    <div className="max-w-3xl">
+    <div className="w-full max-w-5xl animate-rise-in">
       <PageHeader
         title="Settings"
         description="Workspace configuration, notifications, and workflow defaults."
