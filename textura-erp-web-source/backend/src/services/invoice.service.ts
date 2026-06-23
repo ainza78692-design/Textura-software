@@ -57,27 +57,18 @@ export async function updateDocumentStatus(
   if (!invoice)
     throw new ApiError(
       404,
-      "Invoice document not found or invoice is locked",
+      "Invoice document not found",
       "DOCUMENT_NOT_EDITABLE",
     );
-  if (invoice.final_submitted_at) {
-    const statuses = await repo.getDocumentStatuses(invoiceId);
-    const finalStatus = calculateFinalStatus(statuses);
-    invoice = (await repo.updateFinalStatus(invoiceId, finalStatus, userId)) ?? invoice;
-  }
-  return invoice;
-}
-
-export async function finalSubmit(invoiceId: string, userId: string) {
+  
   const statuses = await repo.getDocumentStatuses(invoiceId);
-  if (!statuses.length) throw new ApiError(404, "Invoice not found", "INVOICE_NOT_FOUND");
-
   const finalStatus = calculateFinalStatus(statuses);
-  const invoice = await repo.finalSubmit(invoiceId, finalStatus, userId);
-  if (!invoice)
-    throw new ApiError(409, "Invoice has already been final-submitted", "ALREADY_SUBMITTED");
+  invoice = (await repo.updateFinalStatus(invoiceId, finalStatus, userId)) ?? invoice;
+  
   return invoice;
 }
+
+
 
 export async function getInvoice(id: string) {
   const invoice = await repo.getInvoiceById(id);

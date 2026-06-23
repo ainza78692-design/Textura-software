@@ -4,8 +4,14 @@ import { format } from "date-fns";
 import { ChevronRight, Loader2, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { deleteInvoice, deleteInvoices } from "@/api/invoices";
+import { deleteInvoice, deleteInvoices, updateDocumentStatus } from "@/api/invoices";
 import { StatusBadge } from "@/components/status-badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,7 +33,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { Invoice } from "@/types/api";
+import type { DocStatus, DocumentCode, Invoice } from "@/types/api";
+import { cn } from "@/lib/utils";
 
 const actionColumnClass =
   "sticky right-0 z-20 w-[132px] min-w-[132px] border-l border-border/70 bg-card/98 pl-3 pr-5 text-right shadow-[-18px_0_24px_-24px_oklch(0.2_0.04_240_/_0.36)]";
@@ -43,13 +50,65 @@ function pendingAgeDays(inv: Invoice) {
   return Math.max(0, Math.ceil((Date.now() - created) / 86400000));
 }
 
-function PendingDocumentsCell({ invoice }: { invoice: Invoice }) {
-  const documents = invoice.pending_documents ?? [];
+function InlineDocumentApprovalCell({ invoice }: { invoice: Invoice }) {
+  const queryClient = useQueryClient();
+  const documents = invoice.documents_summary ?? [];
+
+  const mutation = useMutation({
+    mutationFn: ({ code, status }: { code: DocumentCode; status: DocStatus }) =>
+      updateDocumentStatus(invoice.id, code, status),
+    onMutate: async ({ code, status }) => {
+      // Optimistic update
+      await queryClient.cancelQueries({ queryKey: ["invoices"] });
+      const previousInvoices = queryClient.getQueryData(["invoices"]);
+      
+      queryClient.setQueryData(["invoices"], (old: any) => {
+        if (!old?.invoices) return old;
+        return {
+          ...old,
+          invoices: old.invoices.map((inv: Invoice) => {
+            if (inv.id !== invoice.id) return inv;
+            const updatedDocs = (inv.documents_summary ?? []).map(doc =>
+              doc.document_code === code ? { ...doc, status } : doc
+            );
+            
+            // Auto-recalculate temporary final status on frontend for immediate feedback
+            let nextFinalStatus = inv.final_status;
+            if (updatedDocs.some(d => d.status === "rejected")) {
+              nextFinalStatus = "rejected";
+            } else if (updatedDocs.length > 0 && updatedDocs.every(d => d.status === "approved")) {
+              nextFinalStatus = "approved";
+            } else {
+              nextFinalStatus = "pending";
+            }
+            
+            return {
+              ...inv,
+              final_status: nextFinalStatus,
+              documents_summary: updatedDocs
+            };
+          })
+        };
+      });
+      
+      return { previousInvoices };
+    },
+    onError: (err, newDoc, context) => {
+      queryClient.setQueryData(["invoices"], context?.previousInvoices);
+      toast.error(err instanceof Error ? err.message : "Failed to update document status");
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ["invoices"] });
+    },
+    onSuccess: (data, { code, status }) => {
+      toast.success(`Marked as ${status}`, { id: `doc-update-${invoice.id}-${code}` });
+    }
+  });
 
   if (!documents.length) {
     return (
-      <span className="inline-flex rounded-full bg-success/10 px-2.5 py-1 text-xs font-semibold text-success ring-1 ring-success/20">
-        All verified
+      <span className="inline-flex rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground ring-1 ring-border">
+        No documents
       </span>
     );
   }
@@ -57,17 +116,45 @@ function PendingDocumentsCell({ invoice }: { invoice: Invoice }) {
   return (
     <div className="flex max-w-[260px] flex-wrap gap-1">
       {documents.map((doc) => (
-        <Badge
-          key={`${doc.document_code}-${doc.status}`}
-          variant="outline"
-          className={
-            doc.status === "rejected"
-              ? "border-destructive/25 bg-destructive/10 text-destructive"
-              : "border-warning/25 bg-warning/10 text-warning"
-          }
-        >
-          {doc.label}
-        </Badge>
+        <DropdownMenu key={`${doc.document_code}`}>
+          <DropdownMenuTrigger asChild>
+            <button
+              disabled={mutation.isPending && mutation.variables?.code === doc.document_code}
+              className={cn(
+                "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                doc.status === "rejected"
+                  ? "border-transparent bg-destructive/10 text-destructive ring-destructive/25 hover:bg-destructive/20"
+                  : doc.status === "approved"
+                    ? "border-transparent bg-success/10 text-success ring-success/25 hover:bg-success/20"
+                    : "border-transparent bg-warning/10 text-warning ring-warning/25 hover:bg-warning/20",
+                mutation.isPending && mutation.variables?.code === doc.document_code && "opacity-50 cursor-wait"
+              )}
+            >
+              <span className="mr-1">{doc.status === "approved" ? "🟢" : doc.status === "rejected" ? "🔴" : "🟠"}</span>
+              {doc.label}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-[140px]">
+            <DropdownMenuItem 
+              className="text-success focus:text-success focus:bg-success/10"
+              onClick={() => mutation.mutate({ code: doc.document_code, status: "approved" })}
+            >
+              🟢 Approve
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              className="text-warning focus:text-warning focus:bg-warning/10"
+              onClick={() => mutation.mutate({ code: doc.document_code, status: "pending" })}
+            >
+              🟠 Mark Pending
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              className="text-destructive focus:text-destructive focus:bg-destructive/10"
+              onClick={() => mutation.mutate({ code: doc.document_code, status: "rejected" })}
+            >
+              🔴 Reject
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       ))}
     </div>
   );
@@ -172,7 +259,7 @@ export function InvoiceTable({ data, dense = false }: { data: Invoice[]; dense?:
                 <TableHead className="w-[160px] min-w-[160px]">Invoice #</TableHead>
                 <TableHead className="w-[140px] min-w-[140px]">Count</TableHead>
                 <TableHead className="w-[140px] min-w-[140px]">Status</TableHead>
-                <TableHead className="w-[270px] min-w-[270px]">Pending Documents</TableHead>
+                <TableHead className="w-[270px] min-w-[270px]">Documents</TableHead>
                 {!dense && <TableHead className="w-[145px] min-w-[145px]">Pending Since</TableHead>}
                 {!dense && <TableHead className="w-[175px] min-w-[175px]">Updated By</TableHead>}
                 <TableHead className="w-[150px] min-w-[150px]">Last Updated</TableHead>
@@ -230,8 +317,8 @@ export function InvoiceTable({ data, dense = false }: { data: Invoice[]; dense?:
                       <TableCell className="w-[140px] min-w-[140px]">
                         <StatusBadge status={inv.final_status} />
                       </TableCell>
-                      <TableCell className="w-[270px] min-w-[270px]">
-                        <PendingDocumentsCell invoice={inv} />
+                      <TableCell className="w-[270px] min-w-[270px] py-1.5">
+                        <InlineDocumentApprovalCell invoice={inv} />
                       </TableCell>
                       {!dense && (
                         <TableCell className="w-[145px] min-w-[145px]">

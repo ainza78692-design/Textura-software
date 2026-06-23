@@ -21,4 +21,4 @@ invoiceRouter.patch(
   requireRole("operator", "admin"),
   asyncHandler(controller.updateDocument)
 );
-invoiceRouter.post("/:id/final-submit", requireRole("operator", "admin"), asyncHandler(controller.finalSubmit));
+

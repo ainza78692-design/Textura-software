@@ -144,7 +144,7 @@ export async function updateFinalStatus(invoiceId: string, finalStatus: FinalSta
   const result = await query(
     `update invoices
      set final_status = $2, updated_by = $3
-     where id = $1 and final_submitted_at is not null
+     where id = $1
      returning *`,
     [invoiceId, finalStatus, userId]
   );
@@ -286,8 +286,7 @@ export async function listInvoices(filters: {
         )
         from invoice_documents d
         where d.invoice_id = i.id
-          and d.status in ('pending', 'rejected')
-      ), '[]'::jsonb) as pending_documents
+      ), '[]'::jsonb) as documents_summary
     from invoices i
     left join app_users creator on creator.id = i.created_by
     left join app_users updater on updater.id = i.updated_by

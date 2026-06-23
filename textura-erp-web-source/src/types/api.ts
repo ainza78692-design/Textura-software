@@ -59,7 +59,7 @@ export interface Invoice {
   created_at: string;
   updated_at: string;
   documents?: InvoiceDocument[];
-  pending_documents?: PendingDocumentSummary[];
+  documents_summary?: PendingDocumentSummary[];
 }
 
 export interface InvoiceInput {

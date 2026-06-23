@@ -51,10 +51,7 @@ export async function updateDocument(req: Request, res: Response) {
   res.json({ invoice });
 }
 
-export async function finalSubmit(req: Request, res: Response) {
-  const invoice = await invoiceService.finalSubmit(String(req.params.id), req.user!.id);
-  res.json({ invoice });
-}
+
 
 export async function getInvoice(req: Request, res: Response) {
   const invoice = await invoiceService.getInvoice(String(req.params.id));

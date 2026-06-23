@@ -75,11 +75,7 @@ export function updateDocumentStatus(
   });
 }
 
-export function finalSubmitInvoice(invoiceId: string) {
-  return apiRequest<{ invoice: Invoice }>(`/invoices/${invoiceId}/final-submit`, {
-    method: "POST",
-  });
-}
+
 
 export async function exportInvoices(params: InvoiceSearchParams = {}) {
   const query = toQuery(params);

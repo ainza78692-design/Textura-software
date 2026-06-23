@@ -15,9 +15,8 @@ import React, { useEffect, useState } from "react";
 declare global {
   interface Window {
     texturaDesktop: {
-      checkForUpdates: (url: string) => Promise<any>;
-      downloadUpdate: (manifest: any) => Promise<{ filePath: string }>;
-      installUpdate: (filePath: string) => Promise<void>;
+      checkForUpdates: (serverOrigin: string) => Promise<any>;
+      downloadAndInstallUpdate: (serverOrigin: string, manifest: any) => Promise<void>;
     };
   }
 }
@@ -28,22 +27,30 @@ export function DesktopUpdatePrompt() {
   const [updateInfo, setUpdateInfo] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Update URL - Adjust this according to your actual production domain
-  const MANIFEST_URL = "http://100.91.86.65:4000/updates/latest.json";
+  // Update URLs - Primary and Fallback
+  const UPDATE_URLS = [
+    "http://100.91.86.65:4000",
+    "http://192.168.101.8:4000"
+  ];
 
   useEffect(() => {
     const desktop = window.texturaDesktop;
     if (!desktop) return;
 
     const checkUpdates = async () => {
-      try {
-        const result = await desktop.checkForUpdates(MANIFEST_URL);
-        if (result.updateAvailable) {
-          setUpdateInfo(result);
-          setOpen(true);
+      for (const url of UPDATE_URLS) {
+        try {
+          const result = await desktop.checkForUpdates(url);
+          if (result && result.status === "available") {
+            setUpdateInfo({ ...result, serverOrigin: url });
+            setOpen(true);
+            return;
+          } else if (result && result.status === "current") {
+            return; // Successfully checked, no update needed
+          }
+        } catch (err) {
+          console.error(`Failed to check for updates at ${url}:`, err);
         }
-      } catch (err) {
-        console.error("Failed to check for updates:", err);
       }
     };
 
@@ -61,8 +68,10 @@ export function DesktopUpdatePrompt() {
     setInstalling(true);
     setError(null);
     try {
-      const downloaded = await window.texturaDesktop.downloadUpdate(updateInfo.manifest);
-      await window.texturaDesktop.installUpdate(downloaded.filePath);
+      await window.texturaDesktop.downloadAndInstallUpdate(
+        updateInfo.serverOrigin,
+        updateInfo.manifest
+      );
     } catch (err: any) {
       console.error("Update failed", err);
       setError(err.message || "Failed to download and install the update.");

@@ -30,7 +30,6 @@ import { cn } from "@/lib/utils";
 import {
   bulkCreateInvoices,
   createInvoice,
-  finalSubmitInvoice,
   getInvoice,
   listInvoices,
   updateDocumentStatus,
@@ -131,11 +130,7 @@ function headerMatches(field: ExcelField, header: string, aliases: string[]) {
 }
 
 function detectHeader(rows: ExcelRow[]) {
-  let best: {
-    rowIndex: number;
-    columns: Partial<Record<ExcelField, number>>;
-    score: number;
-  } | null = null;
+  let best: any = null;
 
   rows.slice(0, 50).forEach((row, rowIndex) => {
     const normalized = row.map(normalizeHeader);
@@ -165,7 +160,11 @@ function detectHeader(rows: ExcelRow[]) {
     throw new Error("Could not find Bill No and Name of Party columns in this Excel file.");
   }
 
-  return best;
+  return best as {
+    rowIndex: number;
+    columns: Partial<Record<ExcelField, number>>;
+    score: number;
+  };
 }
 
 function parseInvoiceRows(rows: ExcelRow[]) {
@@ -218,7 +217,7 @@ export function InvoiceEntry({ invoiceId: invoiceIdProp }: { invoiceId?: string 
     enabled: Boolean(invoiceId),
   });
 
-  const final = invoice?.final_submitted_at ? invoice.final_status : "pending";
+  const final = invoice?.final_status ?? "pending";
   const { data: existingInvoices } = useQuery({
     queryKey: ["invoices", "customer-suggestions"],
     queryFn: () => listInvoices({ limit: 100 }),
@@ -291,31 +290,7 @@ export function InvoiceEntry({ invoiceId: invoiceIdProp }: { invoiceId?: string 
     },
   });
 
-  const finalSubmitMutation = useMutation({
-    mutationFn: async () => {
-      const payload = {
-        ...form,
-        invoiceDate: date ? format(date, "yyyy-MM-dd") : null,
-      };
-      const saved = invoice
-        ? (await updateInvoice(invoice.id, payload)).invoice
-        : (await createInvoice(payload)).invoice;
-      for (const [code, status] of Object.entries(docs) as [DocumentCode, DocStatus][]) {
-        await updateDocumentStatus(saved.id, code, status);
-      }
-      return finalSubmitInvoice(saved.id);
-    },
-    onSuccess: ({ invoice }) => {
-      setInvoice(invoice);
-      void queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      toast.success(`Final ${invoice.final_status}`, {
-        description: `Invoice committed as ${invoice.final_status.toUpperCase()}`,
-      });
-    },
-    onError: (error) => {
-      toast.error(error instanceof Error ? error.message : "Unable to final submit invoice");
-    },
-  });
+
 
   const bulkImportMutation = useMutation({
     mutationFn: (invoices: InvoiceInput[]) => bulkCreateInvoices(invoices),
@@ -345,8 +320,7 @@ export function InvoiceEntry({ invoiceId: invoiceIdProp }: { invoiceId?: string 
   const busy =
     createMutation.isPending ||
     updateInvoiceMutation.isPending ||
-    statusMutation.isPending ||
-    finalSubmitMutation.isPending;
+    statusMutation.isPending;
 
   async function saveDraft() {
     if (!form.invoiceNumber.trim()) {
@@ -365,7 +339,7 @@ export function InvoiceEntry({ invoiceId: invoiceIdProp }: { invoiceId?: string 
       for (const [code, status] of Object.entries(docs) as [DocumentCode, DocStatus][]) {
         await updateDocumentStatus(saved.id, code, status);
       }
-      toast.success("Draft saved");
+      toast.success("Invoice saved");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to save draft");
     }
@@ -412,12 +386,7 @@ export function InvoiceEntry({ invoiceId: invoiceIdProp }: { invoiceId?: string 
             <Button variant="outline" onClick={saveDraft} disabled={busy}>
               {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               <Save className="mr-2 h-4 w-4" />
-              Save Draft
-            </Button>
-            <Button onClick={() => finalSubmitMutation.mutate()} disabled={busy}>
-              {finalSubmitMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              <Send className="mr-2 h-4 w-4" />
-              Final Submit
+              Save Invoice
             </Button>
           </>
         }
@@ -630,9 +599,9 @@ export function InvoiceEntry({ invoiceId: invoiceIdProp }: { invoiceId?: string 
                     Final {final}
                   </div>
                   <div className="mt-1 text-xs opacity-80">
-                    {invoice?.final_submitted_at
-                      ? "Submitted. Updates recalculate status."
-                      : "Pending until final submit."}
+                    {invoice
+                      ? "Automatically updated on changes."
+                      : "Pending until saved."}
                   </div>
                 </div>
               </div>

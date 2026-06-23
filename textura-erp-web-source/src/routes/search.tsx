@@ -71,7 +71,7 @@ function SearchPage() {
       : allInvoices;
   const dataRows = documents.length
     ? statusRows.filter((invoice) =>
-        (invoice.pending_documents ?? []).some((doc) => documents.includes(doc.document_code)),
+        (invoice.documents_summary ?? []).some((doc) => documents.includes(doc.document_code)),
       )
     : statusRows;
 
