@@ -1,0 +1,9 @@
+{
+  "version": "1.0.10",
+  "latestVersion": "1.0.10",
+  "minimumSupportedVersion": "1.0.0",
+  "installerUrl": "/updates/Textura-ERP-Setup-1.0.10.exe",
+  "sha256": "ce676500566cb8ce4df3c6beb5e468094ccdb735910cf8b44bd6cc73e86202fb",
+  "releaseNotesUrl": "/changelog",
+  "mandatory": false
+}
