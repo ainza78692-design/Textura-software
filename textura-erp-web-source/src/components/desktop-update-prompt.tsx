@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getServerOrigin } from "@/api/client";
+import { getServerOrigin, getAuthToken } from "@/api/client";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +32,14 @@ export function DesktopUpdatePrompt() {
     const check = async () => {
       try {
         const serverOrigin = await getServerOrigin();
+
+        // Don't check for updates if:
+        // 1. Still on default localhost (user hasn't configured a real server yet)
+        // 2. User is not logged in (no auth token saved)
+        const isLocalhost = serverOrigin.includes("localhost") || serverOrigin.includes("127.0.0.1");
+        const token = await getAuthToken();
+        if (isLocalhost || !token) return;
+
         const result = await window.texturaDesktop!.checkForUpdates(serverOrigin);
 
         if (!mounted) return;
