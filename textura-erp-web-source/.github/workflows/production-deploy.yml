@@ -16,8 +16,7 @@ jobs:
     name: Deploy on client server
     runs-on:
       - self-hosted
-      - windows
-      - textura-production
+      - linux
     environment: production
     steps:
       - name: Checkout
@@ -30,5 +29,5 @@ jobs:
           cache: npm
 
       - name: Deploy Textura
-        shell: powershell
-        run: .\ops\windows\deploy-production.ps1 -AppDir "${{ github.workspace }}"
+        shell: bash
+        run: chmod +x ./ops/linux/deploy-production.sh && ./ops/linux/deploy-production.sh
