@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - production
+      - main
 
 concurrency:
   group: textura-production
