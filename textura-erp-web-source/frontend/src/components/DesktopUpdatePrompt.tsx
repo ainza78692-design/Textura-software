@@ -29,7 +29,7 @@ export function DesktopUpdatePrompt() {
 
   // Update URLs - Primary and Fallback
   const UPDATE_URLS = [
-    "http://100.65.95.125:4000",
+    "http://100.65.85.125:4000",
     "http://192.168.101.8:4000"
   ];
 
