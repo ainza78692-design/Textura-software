@@ -6,10 +6,7 @@ import { countUsers, createUser, findUserByEmail, rowToAuthUser } from "../repos
 import type { AuthUser } from "../types/domain";
 
 function signToken(user: AuthUser) {
-  const options: jwt.SignOptions = {
-    expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions["expiresIn"]
-  };
-  return jwt.sign(user, env.JWT_SECRET, options);
+  return jwt.sign(user, env.JWT_SECRET);
 }
 
 export async function register(input: {
