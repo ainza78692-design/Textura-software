@@ -27,10 +27,15 @@ export function DesktopUpdatePrompt() {
   const [updateInfo, setUpdateInfo] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Update URLs - Primary and Fallback
-  const UPDATE_URLS = [
-    "http://100.65.85.125:4000",
-    "http://192.168.101.8:4000"
+  // Update URLs - prioritize the user's selected server URL
+  const savedServerUrl = localStorage.getItem("serverUrl");
+  const UPDATE_URLS = savedServerUrl ? [
+    savedServerUrl,
+    "http://100.65.85.125:3000",
+    "http://192.168.101.8:3000"
+  ] : [
+    "http://100.65.85.125:3000",
+    "http://192.168.101.8:3000"
   ];
 
   useEffect(() => {
