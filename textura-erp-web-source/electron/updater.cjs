@@ -1,7 +1,5 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
-const http = require("node:http");
-const https = require("node:https");
 const path = require("node:path");
 
 function compareVersions(a, b) {
@@ -25,31 +23,92 @@ function resolveUpdateUrl(serverOrigin, value) {
   return new URL(value, `${serverOrigin.replace(/\/+$/, "")}/`).toString();
 }
 
-function downloadFile(url, destination) {
-  return new Promise((resolve, reject) => {
-    const request = (url.startsWith("https:") ? https : http).get(url, (response) => {
-      if ([301, 302, 303, 307, 308].includes(response.statusCode) && response.headers.location) {
-        response.resume();
-        downloadFile(new URL(response.headers.location, url).toString(), destination)
-          .then(resolve)
-          .catch(reject);
-        return;
-      }
+function downloadFile(url, destination, { maxRetries = 3, timeoutMs = 30000 } = {}) {
+  // Use Node's native http/https for reliable large file downloads.
+  // Electron's net.request swallows ERR_CONTENT_LENGTH_MISMATCH silently,
+  // so we use the lower-level Node modules which properly surface stream errors.
+  const http = require("node:http");
+  const https = require("node:https");
 
-      if (response.statusCode !== 200) {
-        response.resume();
-        reject(new Error(`Download failed with HTTP ${response.statusCode}`));
-        return;
-      }
+  function attempt(retriesLeft) {
+    return new Promise((resolve, reject) => {
+      const parsed = new URL(url);
+      const transport = parsed.protocol === "https:" ? https : http;
 
-      const file = fs.createWriteStream(destination);
-      response.pipe(file);
-      file.on("finish", () => file.close(resolve));
-      file.on("error", reject);
+      const req = transport.get(url, { timeout: timeoutMs }, (response) => {
+        // Follow redirects manually
+        if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+          response.resume(); // drain the response
+          url = new URL(response.headers.location, url).toString();
+          attempt(retriesLeft).then(resolve).catch(reject);
+          return;
+        }
+
+        if (response.statusCode !== 200) {
+          response.resume();
+          reject(new Error(`Download failed with HTTP ${response.statusCode}`));
+          return;
+        }
+
+        const expectedLength = parseInt(response.headers["content-length"] || "0", 10);
+        let receivedLength = 0;
+
+        const file = fs.createWriteStream(destination);
+        let settled = false;
+
+        const fail = (err) => {
+          if (settled) return;
+          settled = true;
+          file.destroy();
+          try { fs.rmSync(destination, { force: true }); } catch { /* ignore */ }
+          reject(err);
+        };
+
+        const succeed = () => {
+          if (settled) return;
+          // Validate we received the full file
+          if (expectedLength > 0 && receivedLength !== expectedLength) {
+            fail(new Error(
+              `Download incomplete: received ${receivedLength} of ${expectedLength} bytes. ` +
+              `The network connection was cut off before the file finished downloading.`
+            ));
+            return;
+          }
+          settled = true;
+          file.close(resolve);
+        };
+
+        response.on("data", (chunk) => {
+          receivedLength += chunk.length;
+          if (!file.write(chunk)) {
+            response.pause();
+            file.once("drain", () => response.resume());
+          }
+        });
+
+        response.on("end", () => file.end());
+        response.on("error", fail);
+        file.on("finish", succeed);
+        file.on("error", fail);
+      });
+
+      req.on("timeout", () => {
+        req.destroy(new Error(`Download timed out after ${timeoutMs / 1000}s of inactivity.`));
+      });
+
+      req.on("error", (err) => {
+        // Retry on network errors
+        if (retriesLeft > 0) {
+          const delay = (maxRetries - retriesLeft + 1) * 2000; // 2s, 4s, 6s backoff
+          setTimeout(() => attempt(retriesLeft - 1).then(resolve).catch(reject), delay);
+        } else {
+          reject(new Error(`Download failed after ${maxRetries} retries: ${err.message}`));
+        }
+      });
     });
+  }
 
-    request.on("error", reject);
-  });
+  return attempt(maxRetries);
 }
 
 function sha256File(filePath) {
