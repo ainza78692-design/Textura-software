@@ -97,10 +97,10 @@ export function DesktopUpdatePrompt() {
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md border border-white/10 bg-background/60 backdrop-blur-3xl shadow-2xl overflow-hidden">
+      <DialogContent className="sm:max-w-md border-border/50 bg-background/80 backdrop-blur-3xl shadow-2xl overflow-hidden">
         {/* Glow Effects */}
-        <div className="absolute top-0 right-0 -mr-20 -mt-20 h-64 w-64 rounded-full bg-primary/20 blur-[100px] pointer-events-none" />
-        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 h-64 w-64 rounded-full bg-emerald-500/20 blur-[100px] pointer-events-none" />
+        <div className="absolute top-0 right-0 -mr-20 -mt-20 h-64 w-64 rounded-full bg-primary/10 blur-[100px] pointer-events-none" />
+        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 h-64 w-64 rounded-full bg-primary/10 blur-[100px] pointer-events-none" />
 
         <DialogHeader className="relative z-10 pt-4 px-2">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 border border-primary/20 shadow-[0_0_30px_rgba(var(--primary),0.3)]">
@@ -115,7 +115,7 @@ export function DesktopUpdatePrompt() {
         </DialogHeader>
 
         <div className="relative z-10 px-2 py-4">
-          <div className="rounded-xl border border-white/5 bg-black/40 p-4 space-y-3">
+          <div className="rounded-xl border border-border/50 bg-muted/50 p-4 space-y-3 shadow-inner">
             <div className="flex justify-between items-center text-sm">
               <span className="text-muted-foreground font-medium">Latest Version:</span>
               <span className="font-semibold text-primary px-2 py-1 bg-primary/10 rounded-md">
@@ -124,17 +124,17 @@ export function DesktopUpdatePrompt() {
             </div>
             <div className="flex justify-between items-center text-sm">
               <span className="text-muted-foreground font-medium">Current Version:</span>
-              <span className="font-medium text-white/70">
+              <span className="font-medium text-foreground">
                 v{updateInfo?.currentVersion}
               </span>
             </div>
             
             {updateInfo?.notes && (
-              <div className="pt-2 mt-2 border-t border-white/5">
+              <div className="pt-2 mt-2 border-t border-border/50">
                 <div className="flex items-center gap-2 mb-2 text-xs text-muted-foreground uppercase tracking-wider font-semibold">
                   <Info className="h-3 w-3" /> Release Notes
                 </div>
-                <p className="text-sm text-white/80 leading-relaxed whitespace-pre-wrap">
+                <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">
                   {updateInfo.notes}
                 </p>
               </div>
@@ -149,7 +149,7 @@ export function DesktopUpdatePrompt() {
               variant="outline"
               onClick={handleClose}
               disabled={isInstalling}
-              className="bg-transparent border-white/10 hover:bg-white/5 w-32"
+              className="w-32"
             >
               Later
             </Button>
@@ -167,7 +167,7 @@ export function DesktopUpdatePrompt() {
               </>
             ) : (
               <>
-                <div className="absolute inset-0 bg-gradient-to-r from-emerald-500 to-primary opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                <div className="absolute inset-0 bg-primary opacity-0 group-hover:opacity-10 transition-opacity duration-300" />
                 <span className="relative z-10 flex items-center">
                   <DownloadCloud className="mr-2 h-4 w-4" />
                   Update Now
