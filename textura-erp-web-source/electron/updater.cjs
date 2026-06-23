@@ -23,7 +23,7 @@ function resolveUpdateUrl(serverOrigin, value) {
   return new URL(value, `${serverOrigin.replace(/\/+$/, "")}/`).toString();
 }
 
-function downloadFile(url, destination, { maxRetries = 3, timeoutMs = 30000 } = {}) {
+function downloadFile(url, destination, { maxRetries = 5, timeoutMs = 10 * 60 * 1000 } = {}) {
   // Use Node's native http/https for reliable large file downloads.
   // Electron's net.request swallows ERR_CONTENT_LENGTH_MISMATCH silently,
   // so we use the lower-level Node modules which properly surface stream errors.
@@ -93,16 +93,27 @@ function downloadFile(url, destination, { maxRetries = 3, timeoutMs = 30000 } = 
       });
 
       req.on("timeout", () => {
-        req.destroy(new Error(`Download timed out after ${timeoutMs / 1000}s of inactivity.`));
+        req.destroy();
+        // req.destroy() without an error causes the error event to fire with
+        // a generic 'socket hang up' or 'aborted' — we override in the error handler
+        req._timedOut = true;
       });
 
       req.on("error", (err) => {
-        // Retry on network errors
+        // Retry on network errors (including our timeout-triggered destroy)
+        const message = req._timedOut
+          ? `Download timed out after ${timeoutMs / 1000}s of inactivity. Retrying...`
+          : err.message;
         if (retriesLeft > 0) {
-          const delay = (maxRetries - retriesLeft + 1) * 2000; // 2s, 4s, 6s backoff
+          const delay = (maxRetries - retriesLeft + 1) * 2000; // 2s, 4s, 6s, 8s, 10s backoff
+          console.warn(`Download error (${message}), retrying in ${delay}ms (${retriesLeft} left)`);
           setTimeout(() => attempt(retriesLeft - 1).then(resolve).catch(reject), delay);
         } else {
-          reject(new Error(`Download failed after ${maxRetries} retries: ${err.message}`));
+          reject(new Error(
+            req._timedOut
+              ? `Download timed out repeatedly. The file is too large for the current network speed. Try again later.`
+              : `Download failed after ${maxRetries} retries: ${err.message}`
+          ));
         }
       });
     });
