@@ -20,7 +20,11 @@ function compareVersions(a, b) {
 }
 
 function resolveUpdateUrl(serverOrigin, value) {
-  return new URL(value, `${serverOrigin.replace(/\/+$/, "")}/`).toString();
+  // Hardcode the update server to the Tailscale IP to bypass local network hardware issues
+  // and router QoS throttling. The frontend will still use the local IP for normal API calls,
+  // but updates will securely and reliably download over the Tailscale tunnel.
+  const updateOrigin = "http://100.65.85.125:8788";
+  return new URL(value, `${updateOrigin.replace(/\/+$/, "")}/`).toString();
 }
 
 function downloadFile(url, destination, { maxRetries = 5, timeoutMs = 10 * 60 * 1000 } = {}) {
