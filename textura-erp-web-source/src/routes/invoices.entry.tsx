@@ -103,7 +103,7 @@ const FIELD_ALIASES = {
 
 type ExcelField = keyof typeof FIELD_ALIASES;
 type ExcelRow = unknown[];
-type ImportResult = { createdCount: number; failedCount: number; failedPreview: string[] };
+type ImportResult = { createdCount: number; updatedCount: number; failedCount: number; failedPreview: string[] };
 
 function normalizeHeader(value: unknown) {
   return String(value ?? "")
@@ -358,15 +358,17 @@ export function InvoiceEntry({ invoiceId: invoiceIdProp }: { invoiceId?: string 
 
   const bulkImportMutation = useMutation({
     mutationFn: (invoices: InvoiceInput[]) => bulkCreateInvoices(invoices),
-    onSuccess: ({ created, failed }) => {
+    onSuccess: ({ created, updated = [], failed }) => {
       void queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      const message = `${created.length} invoice${created.length === 1 ? "" : "s"} imported${failed.length ? `, ${failed.length} skipped` : ""}.`;
+      const changedCount = created.length + updated.length;
+      const message = `${created.length} invoice${created.length === 1 ? "" : "s"} created, ${updated.length} updated${failed.length ? `, ${failed.length} skipped` : ""}.`;
       setImportResult({
         createdCount: created.length,
+        updatedCount: updated.length,
         failedCount: failed.length,
         failedPreview: failed.slice(0, 3).map((row) => `${row.invoiceNumber}: ${row.reason}`),
       });
-      if (created.length) toast.success("Excel import completed", { description: message });
+      if (changedCount) toast.success("Excel import completed", { description: message });
       if (failed.length) {
         toast.warning("Some rows were skipped", {
           description: failed
@@ -516,11 +518,11 @@ export function InvoiceEntry({ invoiceId: invoiceIdProp }: { invoiceId?: string 
                       <div>
                         <div className="text-sm font-bold text-success">
                           {importResult.createdCount} invoice
-                          {importResult.createdCount === 1 ? "" : "s"} imported
+                          {importResult.createdCount === 1 ? "" : "s"} created, {importResult.updatedCount} updated
                           {importResult.failedCount ? `, ${importResult.failedCount} skipped` : ""}
                         </div>
                         <div className="mt-1 text-sm leading-6 text-muted-foreground">
-                          Imported invoices are now available in Pending Approvals.
+                          Imported invoices are now available in Pending Approvals or Approved based on the seven required documents.
                         </div>
                         {importResult.failedPreview.length > 0 && (
                           <div className="mt-2 text-xs text-muted-foreground">

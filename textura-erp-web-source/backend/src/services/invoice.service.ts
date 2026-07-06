@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { REQUIRED_DOCUMENT_CODES } from "../domain/documents";
 import { ApiError } from "../middleware/api-error";
 import * as repo from "../repositories/invoice.repository";
 import type { AuthUser, DocStatus, DocumentCode, InvoiceInput } from "../types/domain";
@@ -8,11 +9,39 @@ function scopeFor(user: AuthUser): repo.InvoiceScope {
   return { userId: user.id, isTestUser: user.email.toLowerCase() === "testuser@textura.local" };
 }
 
+async function recalculateInvoiceStatus(invoiceId: string, user: AuthUser) {
+  const scope = scopeFor(user);
+  const statuses = await repo.getRequiredDocumentStatuses(invoiceId, scope);
+  const finalStatus = calculateFinalStatus(statuses);
+  return repo.updateFinalStatus(invoiceId, finalStatus, user.id, scope);
+}
+
 async function createAndRecalculate(input: InvoiceInput, user: AuthUser) {
   const invoice = await repo.createInvoice(input, user.id);
-  const statuses = await repo.getRequiredDocumentStatuses(invoice.id, scopeFor(user));
-  const finalStatus = calculateFinalStatus(statuses);
-  return (await repo.updateFinalStatus(invoice.id, finalStatus, user.id, scopeFor(user))) ?? invoice;
+  return (await recalculateInvoiceStatus(invoice.id, user)) ?? invoice;
+}
+
+function isUniqueInvoiceError(error: unknown) {
+  const code = typeof error === "object" && error !== null && "code" in error ? String((error as { code?: unknown }).code) : "";
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  return code === "23505" || message.includes("duplicate");
+}
+
+async function updateImportedInvoice(input: InvoiceInput, user: AuthUser) {
+  const scope = scopeFor(user);
+  const existing = await repo.getInvoiceByNumber(input.invoiceNumber, scope);
+  if (!existing) return null;
+
+  const updated = await repo.updateInvoice(existing.id, input, user.id, scope);
+  if (!updated) return null;
+
+  for (const code of REQUIRED_DOCUMENT_CODES) {
+    const status = input.documentStatuses?.[code];
+    if (!status) continue;
+    await repo.updateDocumentStatus(existing.id, code, { status }, user.id, scope);
+  }
+
+  return (await recalculateInvoiceStatus(existing.id, user)) ?? updated;
 }
 
 export async function createInvoice(input: InvoiceInput, user: AuthUser) {
@@ -21,23 +50,34 @@ export async function createInvoice(input: InvoiceInput, user: AuthUser) {
 
 export async function bulkCreateInvoices(inputs: InvoiceInput[], user: AuthUser) {
   const created = [];
+  const updated = [];
   const failed: { row: number; invoiceNumber: string; customerName: string; reason: string }[] = [];
 
   for (const [index, input] of inputs.entries()) {
     try {
       created.push(await createAndRecalculate(input, user));
     } catch (error) {
+      if (isUniqueInvoiceError(error)) {
+        const invoice = await updateImportedInvoice(input, user);
+        if (invoice) {
+          updated.push(invoice);
+          continue;
+        }
+      }
+
       const message = error instanceof Error ? error.message : "Unable to create invoice";
       failed.push({
         row: index + 1,
         invoiceNumber: input.invoiceNumber,
         customerName: input.customerName,
-        reason: message.includes("duplicate") ? "Invoice number already exists" : message,
+        reason: isUniqueInvoiceError(error)
+          ? "Invoice number already exists in another profile"
+          : message,
       });
     }
   }
 
-  return { created, failed };
+  return { created, updated, failed };
 }
 
 export async function updateInvoice(id: string, input: Partial<InvoiceInput>, user: AuthUser) {
