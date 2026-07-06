@@ -14,14 +14,24 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+// System user for unauthenticated access
+const SYSTEM_USER: AuthUser = {
+  id: "system-user",
+  email: "system@textura.local",
+  fullName: "System User",
+  role: "operator",
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refreshUser = async () => {
     const token = await getAuthToken();
+    
+    // If no token exists, use system user (no auth required)
     if (!token) {
-      setUser(null);
+      setUser(SYSTEM_USER);
       setLoading(false);
       return;
     }
@@ -30,8 +40,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await authApi.getCurrentUser();
       setUser(result.user);
     } catch {
-      await authApi.logout();
-      setUser(null);
+      // On auth error, fall back to system user
+      setUser(SYSTEM_USER);
     } finally {
       setLoading(false);
     }
@@ -55,7 +65,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
         signOut: async () => {
           await authApi.logout();
-          setUser(null);
+          // Reset to system user instead of null
+          setUser(SYSTEM_USER);
         },
       }}
     >
