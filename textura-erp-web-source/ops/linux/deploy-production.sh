@@ -4,7 +4,7 @@ set -euo pipefail
 ARTIFACT_PATH=""
 RELEASE_ID=""
 INSTALL_ROOT="${TEXTURA_INSTALL_ROOT:-/opt/textura}"
-PUBLIC_HEALTH_URL="${TEXTURA_PUBLIC_HEALTH_URL:-http://127.0.0.1:3000/health/ready}"
+PUBLIC_HEALTH_URL="${TEXTURA_PUBLIC_HEALTH_URL:-http://127.0.0.1:8788/health/ready}"
 BLUE_PORT="${TEXTURA_BLUE_PORT:-4101}"
 GREEN_PORT="${TEXTURA_GREEN_PORT:-4102}"
 HEALTH_ATTEMPTS="${TEXTURA_HEALTH_ATTEMPTS:-20}"
@@ -235,3 +235,4 @@ find "$RELEASE_ROOT" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' |
 write_result "succeeded"
 trap - EXIT
 echo "Deployment succeeded: $RELEASE_ID ($TARGET_SLOT)"
+

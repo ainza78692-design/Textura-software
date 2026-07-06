@@ -2,7 +2,7 @@
 set -euo pipefail
 
 INSTALL_ROOT="${TEXTURA_INSTALL_ROOT:-/opt/textura}"
-PUBLIC_PORT="${TEXTURA_PUBLIC_PORT:-3000}"
+PUBLIC_PORT="${TEXTURA_PUBLIC_PORT:-8788}"
 APP_USER="${TEXTURA_APP_USER:-textura}"
 INITIAL_BACKEND_PORT="${TEXTURA_INITIAL_BACKEND_PORT:-4101}"
 
@@ -123,3 +123,4 @@ systemctl restart nginx
 echo "Linux blue-green layout installed at $INSTALL_ROOT"
 echo "Public endpoint: http://SERVER_LAN_IP:$PUBLIC_PORT"
 echo "Edit $ENV_FILE before first deployment."
+
