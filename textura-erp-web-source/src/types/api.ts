@@ -9,7 +9,9 @@ export type DocumentCode =
   | "po"
   | "count_construction"
   | "mbs"
-  | "tc";
+  | "tc"
+  | "inditex"
+  | "textile_genesis";
 
 export interface AuthUser {
   id: string;
@@ -48,6 +50,8 @@ export interface Invoice {
   count_construction: string | null;
   mbs: string | null;
   tc_status: string | null;
+  inditex: string | null;
+  textile_genesis: string | null;
   remark: string | null;
   invoice_date: string | null;
   final_status: FinalStatus;
@@ -68,6 +72,8 @@ export interface InvoiceInput {
   ewayBill?: string | null;
   quantityMeters?: string | null;
   countConstruction?: string | null;
+  inditex?: string | null;
+  textileGenesis?: string | null;
   remark?: string | null;
   invoiceDate?: string | null;
 }
