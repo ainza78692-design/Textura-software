@@ -9,7 +9,11 @@ export type DocumentCode =
   | "po"
   | "count_construction"
   | "mbs"
-  | "tc";
+  | "tc"
+  | "inditex"
+  | "textile_genesis";
+
+export type FixedProfile = "yes_fashion" | "test_user";
 
 export interface AuthUser {
   id: string;
@@ -24,6 +28,9 @@ export interface InvoiceInput {
   ewayBill?: string | null;
   quantityMeters?: string | null;
   countConstruction?: string | null;
+  inditex?: string | null;
+  textileGenesis?: string | null;
+  documentStatuses?: Partial<Record<DocumentCode, DocStatus>>;
   remark?: string | null;
   invoiceDate?: string | null;
 }

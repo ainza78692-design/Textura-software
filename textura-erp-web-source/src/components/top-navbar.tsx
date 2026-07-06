@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Moon, Search, Sun, ChevronDown } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { listInvoices } from "@/api/invoices";
@@ -18,18 +18,25 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
 import { getStoredString, setStoredString } from "@/lib/desktop-store";
+import type { FixedProfile } from "@/types/api";
 
 const THEME_KEY = "theme";
 const LEGACY_THEME_KEY = "textura-theme";
+
+const profileLabels: Record<FixedProfile, string> = {
+  yes_fashion: "Yes Fashion",
+  test_user: "Test User",
+};
 
 export function TopNavbar() {
   const [dark, setDark] = useState(false);
   const [themeReady, setThemeReady] = useState(false);
   const [searchValue, setSearchValue] = useState("");
-  const { user, signOut } = useAuth();
+  const { user, profile, switchProfile } = useAuth();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const email = user?.email ?? "";
-  const fullName = user?.fullName ?? email.split("@")[0] ?? "User";
+  const fullName = profileLabels[profile] ?? user?.fullName ?? "User";
   const initials =
     fullName
       .split(" ")
@@ -73,6 +80,15 @@ export function TopNavbar() {
     setSearchValue("");
     navigate({ to: "/search", search: { q: trimmedSearch } });
   };
+
+  async function selectProfile(nextProfile: FixedProfile) {
+    if (nextProfile === profile) return;
+    await switchProfile(nextProfile);
+    await queryClient.invalidateQueries({ queryKey: ["invoices"] });
+    await queryClient.invalidateQueries({ queryKey: ["invoice"] });
+    setSearchValue("");
+    navigate({ to: "/" });
+  }
 
   return (
     <header className="sticky top-0 z-30 flex h-16 min-w-0 max-w-full items-center gap-3 border-b border-border/70 bg-card/72 px-4 shadow-soft backdrop-blur-xl">
@@ -156,22 +172,18 @@ export function TopNavbar() {
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuLabel>My Account</DropdownMenuLabel>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>Active profile</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Profile</DropdownMenuItem>
-            <DropdownMenuItem>Preferences</DropdownMenuItem>
-            <DropdownMenuItem>Audit log</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive"
-              onClick={async () => {
-                await signOut();
-                navigate({ to: "/auth" });
-              }}
-            >
-              Sign out
-            </DropdownMenuItem>
+            {(["yes_fashion", "test_user"] as FixedProfile[]).map((item) => (
+              <DropdownMenuItem
+                key={item}
+                onClick={() => void selectProfile(item)}
+                className={item === profile ? "bg-accent font-semibold" : undefined}
+              >
+                {profileLabels[item]}
+              </DropdownMenuItem>
+            ))}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

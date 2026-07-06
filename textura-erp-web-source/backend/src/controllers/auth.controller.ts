@@ -1,6 +1,12 @@
 import type { Request, Response } from "express";
 import * as authService from "../services/auth.service";
-import { loginSchema, registerSchema } from "../validators/auth.validators";
+import { autoSessionSchema, loginSchema, registerSchema } from "../validators/auth.validators";
+
+export async function autoSession(req: Request, res: Response) {
+  const payload = autoSessionSchema.parse(req.body);
+  const result = await authService.autoSession(payload.profile);
+  res.json(result);
+}
 
 export async function register(req: Request, res: Response) {
   const payload = registerSchema.parse(req.body);

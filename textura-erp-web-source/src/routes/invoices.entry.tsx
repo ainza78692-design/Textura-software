@@ -5,8 +5,7 @@ import { format } from "date-fns";
 import {
   CalendarIcon,
   Save,
-  Send,
-  CheckCircle2,
+    CheckCircle2,
   XCircle,
   Clock,
   Sparkles,
@@ -56,6 +55,15 @@ const OPTIONAL_DOCS: { code: DocumentCode; label: string }[] = [
   { code: "inditex", label: "Inditex" },
   { code: "textile_genesis", label: "Textile Genesis" },
 ];
+const REQUIRED_WORKFLOW_FIELDS = [
+  ["invoiceDoc", "invoice"],
+  ["ewayBillDoc", "eway_bill"],
+  ["grsDoc", "grs"],
+  ["poDoc", "po"],
+  ["countConstructionDoc", "count_construction"],
+  ["mbsDoc", "mbs"],
+  ["tcDoc", "tc"],
+] as const;
 
 const ALL_DOCS = [...REQUIRED_DOCS, ...OPTIONAL_DOCS];
 
@@ -84,6 +92,13 @@ const FIELD_ALIASES = {
   ],
   inditex: ["inditex", "inditex value"],
   textileGenesis: ["textile genesis", "textile genesis value", "textile_genesis"],
+  invoiceDoc: ["invoice"],
+  ewayBillDoc: ["e-way bill", "eway bill"],
+  grsDoc: ["grs"],
+  poDoc: ["po"],
+  countConstructionDoc: ["count construction"],
+  mbsDoc: ["mbs"],
+  tcDoc: ["tc"],
 } as const;
 
 type ExcelField = keyof typeof FIELD_ALIASES;
@@ -111,7 +126,7 @@ function toIsoDate(value: unknown) {
   const text = cellText(value);
   if (!text) return null;
 
-  const match = text.match(/^(\d{1,2})[\/\/​](​\d{1,2})[\/\/​](\d{2,4})$/);
+  const match = text.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
   if (match) {
     const [, dd, mm, yyyy] = match;
     const year = yyyy.length === 2 ? `20${yyyy}` : yyyy;
@@ -198,6 +213,14 @@ function parseInvoiceRows(rows: ExcelRow[]) {
       header.columns.inditex == null ? null : cellText(row[header.columns.inditex]);
     const textileGenesis =
       header.columns.textileGenesis == null ? null : cellText(row[header.columns.textileGenesis]);
+    const documentStatuses = Object.fromEntries(
+      REQUIRED_WORKFLOW_FIELDS.map(([field, code]) => [
+        code,
+        header.columns[field] == null || !cellText(row[header.columns[field]]) ? "pending" : "approved",
+      ]),
+    ) as Partial<Record<DocumentCode, DocStatus>>;
+    if (inditex) documentStatuses.inditex = "approved";
+    if (textileGenesis) documentStatuses.textile_genesis = "approved";
 
     invoices.push({
       invoiceNumber,
@@ -208,6 +231,7 @@ function parseInvoiceRows(rows: ExcelRow[]) {
         header.columns.quantityMeters == null ? null : cellText(row[header.columns.quantityMeters]),
       inditex: inditex || null,
       textileGenesis: textileGenesis || null,
+      documentStatuses,
     });
   }
 
@@ -283,7 +307,11 @@ export function InvoiceEntry({ invoiceId: invoiceIdProp }: { invoiceId?: string 
     // Update optional doc data tracking
     if (key === "inditex" || key === "textileGenesis") {
       const docKey = key === "inditex" ? "inditex" : "textile_genesis";
-      setOptionalDocData((current) => ({ ...current, [docKey]: Boolean(value) }));
+      setOptionalDocData((current) => ({ ...current, [docKey]: Boolean(value.trim()) }));
+      setDocs((current) => ({
+        ...current,
+        [docKey]: value.trim() ? "approved" : "pending",
+      }));
     }
   }
 
@@ -372,7 +400,12 @@ export function InvoiceEntry({ invoiceId: invoiceIdProp }: { invoiceId?: string 
       if (invoice) {
         await updateInvoiceMutation.mutateAsync();
       }
+      const visibleDocCodes = new Set<DocumentCode>([
+        ...REQUIRED_DOCS.map((doc) => doc.code),
+        ...OPTIONAL_DOCS.filter((doc) => optionalDocData[doc.code]).map((doc) => doc.code),
+      ]);
       for (const [code, status] of Object.entries(docs) as [DocumentCode, DocStatus][]) {
+        if (!visibleDocCodes.has(code)) continue;
         await updateDocumentStatus(saved.id, code, status);
       }
       toast.success("Invoice saved");
@@ -793,3 +826,5 @@ function DocCard({
     </div>
   );
 }
+
+

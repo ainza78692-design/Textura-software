@@ -13,7 +13,7 @@ export const Route = createFileRoute("/settings")({ component: Settings });
 
 function Settings() {
   const navigate = useNavigate();
-  const { signOut } = useAuth();
+  const { refreshUser } = useAuth();
 
   return (
     <div className="w-full max-w-7xl mx-auto animate-rise-in">
@@ -24,8 +24,8 @@ function Settings() {
       <div className="space-y-6">
         <ServerConnectionCard
           onServerChanged={async () => {
-            await signOut();
-            navigate({ to: "/auth" });
+            await refreshUser();
+            navigate({ to: "/" });
           }}
         />
 
@@ -103,3 +103,4 @@ function Settings() {
     </div>
   );
 }
+

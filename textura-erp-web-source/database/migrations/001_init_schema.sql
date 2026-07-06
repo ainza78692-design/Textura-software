@@ -11,7 +11,9 @@ create type document_code as enum (
   'po',
   'count_construction',
   'mbs',
-  'tc'
+  'tc',
+  'inditex',
+  'textile_genesis'
 );
 
 create table app_users (
@@ -36,6 +38,8 @@ create table invoices (
   count_construction text,
   mbs text,
   tc_status text,
+  inditex text,
+  textile_genesis text,
   remark text,
   invoice_date date,
   final_status workflow_status not null default 'pending',
@@ -103,6 +107,8 @@ begin
     coalesce(new.count_construction, '') || ' ' ||
     coalesce(new.mbs, '') || ' ' ||
     coalesce(new.tc_status, '') || ' ' ||
+    coalesce(new.inditex, '') || ' ' ||
+    coalesce(new.textile_genesis, '') || ' ' ||
     coalesce(new.remark, '') || ' ' ||
     coalesce(new.final_status::text, '')
   );
@@ -131,6 +137,8 @@ begin
     when 'count_construction' then 50
     when 'mbs' then 60
     when 'tc' then 70
+    when 'inditex' then 80
+    when 'textile_genesis' then 90
   end;
   return new;
 end;
@@ -150,3 +158,4 @@ create index idx_invoice_documents_code_status on invoice_documents(document_cod
 create index idx_invoice_audit_invoice_created on invoice_audit_log(invoice_id, created_at desc);
 
 commit;
+

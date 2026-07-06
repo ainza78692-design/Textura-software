@@ -9,7 +9,9 @@ export const documentCodeSchema = z.enum([
   "po",
   "count_construction",
   "mbs",
-  "tc"
+  "tc",
+  "inditex",
+  "textile_genesis"
 ]);
 
 export const invoiceInputSchema = z.object({
@@ -18,6 +20,9 @@ export const invoiceInputSchema = z.object({
   ewayBill: z.string().trim().max(120).nullish(),
   quantityMeters: z.string().trim().max(80).nullish(),
   countConstruction: z.string().trim().max(180).nullish(),
+  inditex: z.string().trim().max(180).nullish(),
+  textileGenesis: z.string().trim().max(180).nullish(),
+  documentStatuses: z.record(documentCodeSchema, docStatusSchema).optional(),
   remark: z.string().trim().max(2000).nullish(),
   invoiceDate: z.string().date().nullish()
 });
@@ -48,3 +53,4 @@ export const invoiceSearchSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
   offset: z.coerce.number().int().min(0).default(0)
 });
+

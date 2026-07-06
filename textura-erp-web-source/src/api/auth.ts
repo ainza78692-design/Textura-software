@@ -1,5 +1,14 @@
 import { apiRequest, clearAuthToken, setAuthToken } from "./client";
-import type { AuthResponse, AuthUser, Role } from "@/types/api";
+import type { AuthResponse, AuthUser, FixedProfile, Role } from "@/types/api";
+
+export async function autoSession(profile: FixedProfile) {
+  const result = await apiRequest<AuthResponse>("/auth/auto-session", {
+    method: "POST",
+    body: JSON.stringify({ profile }),
+  });
+  await setAuthToken(result.token);
+  return result;
+}
 
 export async function login(email: string, password: string) {
   const result = await apiRequest<AuthResponse>("/auth/login", {
