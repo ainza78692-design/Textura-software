@@ -1,11 +1,14 @@
 import { getStoredString, removeStoredString, setStoredString } from "@/lib/desktop-store";
+import type { AuthResponse, FixedProfile } from "@/types/api";
 
 const TOKEN_KEY = "auth_token";
 const SERVER_URL_KEY = "server_origin";
+const PROFILE_KEY = "active_profile";
 const LEGACY_TOKEN_KEY = "textile_flow_token";
 const LEGACY_SERVER_URL_KEY = "textura_server_url";
 const CONNECTION_TEST_TIMEOUT_MS = 8000;
 const API_REQUEST_TIMEOUT_MS = 15000;
+const DEFAULT_PROFILE: FixedProfile = "yes_fashion";
 
 function defaultServerOrigin() {
   try {
@@ -13,6 +16,10 @@ function defaultServerOrigin() {
   } catch {
     return "http://localhost:4000";
   }
+}
+
+function normalizeProfile(value: string | null): FixedProfile {
+  return value === "test_user" ? "test_user" : DEFAULT_PROFILE;
 }
 
 export function normalizeServerUrl(input: string) {
@@ -112,6 +119,31 @@ export async function clearAuthToken() {
   await removeStoredString(TOKEN_KEY, LEGACY_TOKEN_KEY);
 }
 
+async function refreshFixedProfileToken() {
+  const profile = normalizeProfile(await getStoredString(PROFILE_KEY));
+  const baseUrl = await apiBaseUrl();
+  const response = await fetch(`${baseUrl}/auth/auto-session`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ profile }),
+  });
+
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
+
+  if (!response.ok) {
+    throw new ApiClientError(
+      data?.error?.message ?? "Unable to refresh desktop session",
+      response.status,
+      data?.error?.code,
+    );
+  }
+
+  const result = data as AuthResponse;
+  await setAuthToken(result.token);
+  return result.token;
+}
+
 export class ApiClientError extends Error {
   constructor(
     message: string,
@@ -122,16 +154,13 @@ export class ApiClientError extends Error {
   }
 }
 
-export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = await getAuthToken();
+async function fetchApi(path: string, init: RequestInit, token: string | null) {
   const baseUrl = await apiBaseUrl();
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
 
-  let response: Response;
-
   try {
-    response = await fetch(`${baseUrl}${path}`, {
+    return await fetch(`${baseUrl}${path}`, {
       ...init,
       headers: {
         "Content-Type": "application/json",
@@ -147,6 +176,16 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
     throw error;
   } finally {
     window.clearTimeout(timeout);
+  }
+}
+
+export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  let token = await getAuthToken();
+  let response = await fetchApi(path, init, token);
+
+  if (response.status === 401 && !path.startsWith("/auth/")) {
+    token = await refreshFixedProfileToken();
+    response = await fetchApi(path, init, token);
   }
 
   const text = await response.text();

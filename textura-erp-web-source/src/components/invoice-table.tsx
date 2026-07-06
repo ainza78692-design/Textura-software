@@ -36,6 +36,15 @@ import {
 import type { DocStatus, DocumentCode, Invoice } from "@/types/api";
 import { cn } from "@/lib/utils";
 
+const REQUIRED_DOCUMENT_CODES: DocumentCode[] = [
+  "invoice",
+  "eway_bill",
+  "grs",
+  "po",
+  "count_construction",
+  "mbs",
+  "tc",
+];
 const actionColumnClass =
   "sticky right-0 z-20 w-[132px] min-w-[132px] border-l border-border/70 bg-card/98 pl-3 pr-5 text-right shadow-[-18px_0_24px_-24px_oklch(0.2_0.04_240_/_0.36)]";
 
@@ -74,9 +83,10 @@ function InlineDocumentApprovalCell({ invoice }: { invoice: Invoice }) {
             
             // Auto-recalculate temporary final status on frontend for immediate feedback
             let nextFinalStatus = inv.final_status;
-            if (updatedDocs.some(d => d.status === "rejected")) {
+            const requiredDocs = updatedDocs.filter((d) => REQUIRED_DOCUMENT_CODES.includes(d.document_code));
+            if (requiredDocs.some((d) => d.status === "rejected")) {
               nextFinalStatus = "rejected";
-            } else if (updatedDocs.length > 0 && updatedDocs.every(d => d.status === "approved")) {
+            } else if (requiredDocs.length > 0 && requiredDocs.every((d) => d.status === "approved")) {
               nextFinalStatus = "approved";
             } else {
               nextFinalStatus = "pending";
@@ -411,3 +421,5 @@ export function InvoiceTable({ data, dense = false }: { data: Invoice[]; dense?:
     </>
   );
 }
+
+

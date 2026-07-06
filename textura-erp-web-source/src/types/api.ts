@@ -1,6 +1,7 @@
 export type Role = "operator" | "admin" | "management";
 export type DocStatus = "pending" | "approved" | "rejected";
 export type FinalStatus = DocStatus;
+export type FixedProfile = "yes_fashion" | "test_user";
 
 export type DocumentCode =
   | "invoice"
@@ -74,6 +75,7 @@ export interface InvoiceInput {
   countConstruction?: string | null;
   inditex?: string | null;
   textileGenesis?: string | null;
+  documentStatuses?: Partial<Record<DocumentCode, DocStatus>>;
   remark?: string | null;
   invoiceDate?: string | null;
 }
@@ -89,3 +91,4 @@ export interface InvoiceSearchParams {
   limit?: number;
   offset?: number;
 }
+
