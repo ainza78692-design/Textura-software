@@ -186,6 +186,22 @@ export async function updateInvoice(
   });
 }
 
+export async function getInvoiceByNumber(invoiceNumber: string, scope?: InvoiceScope) {
+  const values: unknown[] = [invoiceNumber];
+  const where = ["lower(i.invoice_number) = lower($1)"];
+  addScope(where, values, scope, "i");
+
+  const result = await query<{ id: string }>(
+    `select i.id
+     from invoices i
+     where ${where.join(" and ")}
+     limit 1`,
+    values,
+  );
+
+  if (!result.rows[0]) return null;
+  return getInvoiceById(result.rows[0].id, undefined, scope);
+}
 export async function updateDocumentStatus(
   invoiceId: string,
   documentCode: DocumentCode,
