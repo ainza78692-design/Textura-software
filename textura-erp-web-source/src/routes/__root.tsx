@@ -111,7 +111,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={150}>
         <AuthProvider>
-          <AuthGate />
+          <AppLayout />
           <DesktopUpdatePrompt />
           <Toaster position="top-right" richColors />
         </AuthProvider>
@@ -120,22 +120,13 @@ function RootComponent() {
   );
 }
 
-function AuthGate() {
-  const { session, loading } = useAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
+function AppLayout() {
+  const { loading } = useAuth();
   const [mounted, setMounted] = useState(false);
-  const isAuthRoute = location.pathname === "/auth";
 
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  useEffect(() => {
-    if (mounted && !loading && !session && !isAuthRoute) {
-      navigate({ to: "/auth" });
-    }
-  }, [mounted, loading, session, isAuthRoute, navigate]);
 
   if (!mounted || loading) {
     return (
@@ -143,10 +134,6 @@ function AuthGate() {
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
       </div>
     );
-  }
-
-  if (isAuthRoute || !session) {
-    return <Outlet />;
   }
 
   return (
