@@ -11,3 +11,7 @@ export const loginSchema = z.object({
   email: z.string().trim().email().max(255),
   password: z.string().min(1).max(72)
 });
+
+export const autoSessionSchema = z.object({
+  profile: z.enum(["yes_fashion", "test_user"]),
+});

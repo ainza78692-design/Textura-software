@@ -14,3 +14,8 @@ test("final status remains pending for incomplete or empty workflows", () => {
   assert.equal(calculateFinalStatus(["approved", "pending"]), "pending");
   assert.equal(calculateFinalStatus([]), "pending");
 });
+
+test("optional document statuses are ignored when caller passes only required statuses", () => {
+  const requiredStatuses = ["approved", "approved", "approved", "approved", "approved", "approved", "approved"];
+  assert.equal(calculateFinalStatus(requiredStatuses), "approved");
+});

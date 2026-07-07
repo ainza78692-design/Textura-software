@@ -1,6 +1,7 @@
 export type Role = "operator" | "admin" | "management";
 export type DocStatus = "pending" | "approved" | "rejected";
 export type FinalStatus = DocStatus;
+export type FixedProfile = "yes_fashion" | "test_user";
 
 export type DocumentCode =
   | "invoice"
@@ -9,7 +10,9 @@ export type DocumentCode =
   | "po"
   | "count_construction"
   | "mbs"
-  | "tc";
+  | "tc"
+  | "inditex"
+  | "textile_genesis";
 
 export interface AuthUser {
   id: string;
@@ -48,6 +51,8 @@ export interface Invoice {
   count_construction: string | null;
   mbs: string | null;
   tc_status: string | null;
+  inditex: string | null;
+  textile_genesis: string | null;
   remark: string | null;
   invoice_date: string | null;
   final_status: FinalStatus;
@@ -68,6 +73,9 @@ export interface InvoiceInput {
   ewayBill?: string | null;
   quantityMeters?: string | null;
   countConstruction?: string | null;
+  inditex?: string | null;
+  textileGenesis?: string | null;
+  documentStatuses?: Partial<Record<DocumentCode, DocStatus>>;
   remark?: string | null;
   invoiceDate?: string | null;
 }
@@ -83,3 +91,4 @@ export interface InvoiceSearchParams {
   limit?: number;
   offset?: number;
 }
+

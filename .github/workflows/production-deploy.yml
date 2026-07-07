@@ -136,7 +136,7 @@ jobs:
           TEXTURA_DEPLOY_WEBHOOK_URL: ${{ secrets.TEXTURA_DEPLOY_WEBHOOK_URL }}
         run: |
           install_root="${TEXTURA_INSTALL_ROOT:-/opt/textura}"
-          health_url="${TEXTURA_PUBLIC_HEALTH_URL:-http://127.0.0.1:3000/health/ready}"
+          health_url="${TEXTURA_PUBLIC_HEALTH_URL:-http://127.0.0.1:8788/health/ready}"
           release_id="${GITHUB_SHA:0:12}"
 
           chmod +x "${{ env.PROJECT_DIR }}/ops/linux/"*.sh
@@ -165,7 +165,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: production-deploy-logs-${{ github.run_id }}
-          path: ${{ runner.temp }}\textura-deployment-logs
+          path: ${{ runner.temp }}/textura-deployment-logs
           retention-days: 30
           if-no-files-found: warn
 
@@ -196,3 +196,4 @@ jobs:
             "text": f"Textura production pipeline: validation={os.environ['VALIDATE_RESULT']}, deployment={os.environ['DEPLOY_RESULT']}, commit=${{ github.sha }}, run=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           }))
           PY
+

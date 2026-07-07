@@ -5,8 +5,7 @@ import { format } from "date-fns";
 import {
   CalendarIcon,
   Save,
-  Send,
-  CheckCircle2,
+    CheckCircle2,
   XCircle,
   Clock,
   Sparkles,
@@ -40,7 +39,8 @@ import { useAuth } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/invoices/entry")({ component: InvoiceEntry });
 
-const DOCS: { code: DocumentCode; label: string }[] = [
+// Required documents - these affect final invoice approval status
+const REQUIRED_DOCS: { code: DocumentCode; label: string }[] = [
   { code: "invoice", label: "Invoice" },
   { code: "eway_bill", label: "E-way Bill" },
   { code: "grs", label: "GRS" },
@@ -50,7 +50,24 @@ const DOCS: { code: DocumentCode; label: string }[] = [
   { code: "tc", label: "TC" },
 ];
 
-const emptyDocs = Object.fromEntries(DOCS.map((doc) => [doc.code, "pending"])) as Record<
+// Optional documents - these do NOT affect final invoice approval status
+const OPTIONAL_DOCS: { code: DocumentCode; label: string }[] = [
+  { code: "inditex", label: "Inditex" },
+  { code: "textile_genesis", label: "Textile Genesis" },
+];
+const REQUIRED_WORKFLOW_FIELDS = [
+  ["invoiceDoc", "invoice"],
+  ["ewayBillDoc", "eway_bill"],
+  ["grsDoc", "grs"],
+  ["poDoc", "po"],
+  ["countConstructionDoc", "count_construction"],
+  ["mbsDoc", "mbs"],
+  ["tcDoc", "tc"],
+] as const;
+
+const ALL_DOCS = [...REQUIRED_DOCS, ...OPTIONAL_DOCS];
+
+const emptyDocs = Object.fromEntries(ALL_DOCS.map((doc) => [doc.code, "pending"])) as Record<
   DocumentCode,
   DocStatus
 >;
@@ -73,11 +90,20 @@ const FIELD_ALIASES = {
     "eway bill number",
     "e-way bill no",
   ],
+  inditex: ["inditex", "inditex value"],
+  textileGenesis: ["textile genesis", "textile genesis value", "textile_genesis"],
+  invoiceDoc: ["invoice"],
+  ewayBillDoc: ["e-way bill", "eway bill"],
+  grsDoc: ["grs"],
+  poDoc: ["po"],
+  countConstructionDoc: ["count construction"],
+  mbsDoc: ["mbs"],
+  tcDoc: ["tc"],
 } as const;
 
 type ExcelField = keyof typeof FIELD_ALIASES;
 type ExcelRow = unknown[];
-type ImportResult = { createdCount: number; failedCount: number; failedPreview: string[] };
+type ImportResult = { createdCount: number; updatedCount: number; failedCount: number; failedPreview: string[] };
 
 function normalizeHeader(value: unknown) {
   return String(value ?? "")
@@ -100,7 +126,7 @@ function toIsoDate(value: unknown) {
   const text = cellText(value);
   if (!text) return null;
 
-  const match = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  const match = text.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
   if (match) {
     const [, dd, mm, yyyy] = match;
     const year = yyyy.length === 2 ? `20${yyyy}` : yyyy;
@@ -126,6 +152,9 @@ function headerMatches(field: ExcelField, header: string, aliases: string[]) {
     return header === "quantity" || header === "qty" || header.includes("meter");
   if (field === "invoiceDate")
     return header === "date" || header === "billdate" || header === "invoicedate";
+  if (field === "inditex") return header.includes("inditex");
+  if (field === "textileGenesis")
+    return header.includes("textile") && header.includes("genesis");
   return false;
 }
 
@@ -180,6 +209,18 @@ function parseInvoiceRows(rows: ExcelRow[]) {
       header.columns.invoiceDate == null ? null : toIsoDate(row[header.columns.invoiceDate]);
     const ewayBill =
       header.columns.ewayBill == null ? null : cellText(row[header.columns.ewayBill]);
+    const inditex =
+      header.columns.inditex == null ? null : cellText(row[header.columns.inditex]);
+    const textileGenesis =
+      header.columns.textileGenesis == null ? null : cellText(row[header.columns.textileGenesis]);
+    const documentStatuses = Object.fromEntries(
+      REQUIRED_WORKFLOW_FIELDS.map(([field, code]) => [
+        code,
+        header.columns[field] == null || !cellText(row[header.columns[field]]) ? "pending" : "approved",
+      ]),
+    ) as Partial<Record<DocumentCode, DocStatus>>;
+    if (inditex) documentStatuses.inditex = "approved";
+    if (textileGenesis) documentStatuses.textile_genesis = "approved";
 
     invoices.push({
       invoiceNumber,
@@ -188,6 +229,9 @@ function parseInvoiceRows(rows: ExcelRow[]) {
       ewayBill: ewayBill && ewayBill !== invoiceNumber ? ewayBill : null,
       quantityMeters:
         header.columns.quantityMeters == null ? null : cellText(row[header.columns.quantityMeters]),
+      inditex: inditex || null,
+      textileGenesis: textileGenesis || null,
+      documentStatuses,
     });
   }
 
@@ -202,12 +246,18 @@ export function InvoiceEntry({ invoiceId: invoiceIdProp }: { invoiceId?: string 
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [docs, setDocs] = useState<Record<DocumentCode, DocStatus>>(emptyDocs);
+  const [optionalDocData, setOptionalDocData] = useState<Record<string, boolean>>({
+    inditex: false,
+    textile_genesis: false,
+  });
   const [form, setForm] = useState({
     customerName: "",
     invoiceNumber: "",
     ewayBill: "",
     quantityMeters: "",
     countConstruction: "",
+    inditex: "",
+    textileGenesis: "",
     remark: "",
   });
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
@@ -236,6 +286,8 @@ export function InvoiceEntry({ invoiceId: invoiceIdProp }: { invoiceId?: string 
       ewayBill: loaded.eway_bill ?? "",
       quantityMeters: loaded.quantity_meters ?? "",
       countConstruction: loaded.count_construction ?? "",
+      inditex: loaded.inditex ?? "",
+      textileGenesis: loaded.textile_genesis ?? "",
       remark: loaded.remark ?? "",
     });
     setDate(loaded.invoice_date ? new Date(loaded.invoice_date) : undefined);
@@ -243,10 +295,24 @@ export function InvoiceEntry({ invoiceId: invoiceIdProp }: { invoiceId?: string 
       ...emptyDocs,
       ...Object.fromEntries((loaded.documents ?? []).map((doc) => [doc.document_code, doc.status])),
     });
+    // Track which optional docs have data
+    setOptionalDocData({
+      inditex: Boolean(loaded.inditex),
+      textile_genesis: Boolean(loaded.textile_genesis),
+    });
   }, [existingInvoiceQuery.data]);
 
   function updateForm(key: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [key]: value }));
+    // Update optional doc data tracking
+    if (key === "inditex" || key === "textileGenesis") {
+      const docKey = key === "inditex" ? "inditex" : "textile_genesis";
+      setOptionalDocData((current) => ({ ...current, [docKey]: Boolean(value.trim()) }));
+      setDocs((current) => ({
+        ...current,
+        [docKey]: value.trim() ? "approved" : "pending",
+      }));
+    }
   }
 
   const createMutation = useMutation({
@@ -290,19 +356,19 @@ export function InvoiceEntry({ invoiceId: invoiceIdProp }: { invoiceId?: string 
     },
   });
 
-
-
   const bulkImportMutation = useMutation({
     mutationFn: (invoices: InvoiceInput[]) => bulkCreateInvoices(invoices),
-    onSuccess: ({ created, failed }) => {
+    onSuccess: ({ created, updated = [], failed }) => {
       void queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      const message = `${created.length} invoice${created.length === 1 ? "" : "s"} imported${failed.length ? `, ${failed.length} skipped` : ""}.`;
+      const changedCount = created.length + updated.length;
+      const message = `${created.length} invoice${created.length === 1 ? "" : "s"} created, ${updated.length} updated${failed.length ? `, ${failed.length} skipped` : ""}.`;
       setImportResult({
         createdCount: created.length,
+        updatedCount: updated.length,
         failedCount: failed.length,
         failedPreview: failed.slice(0, 3).map((row) => `${row.invoiceNumber}: ${row.reason}`),
       });
-      if (created.length) toast.success("Excel import completed", { description: message });
+      if (changedCount) toast.success("Excel import completed", { description: message });
       if (failed.length) {
         toast.warning("Some rows were skipped", {
           description: failed
@@ -336,7 +402,12 @@ export function InvoiceEntry({ invoiceId: invoiceIdProp }: { invoiceId?: string 
       if (invoice) {
         await updateInvoiceMutation.mutateAsync();
       }
+      const visibleDocCodes = new Set<DocumentCode>([
+        ...REQUIRED_DOCS.map((doc) => doc.code),
+        ...OPTIONAL_DOCS.filter((doc) => optionalDocData[doc.code]).map((doc) => doc.code),
+      ]);
       for (const [code, status] of Object.entries(docs) as [DocumentCode, DocStatus][]) {
+        if (!visibleDocCodes.has(code)) continue;
         await updateDocumentStatus(saved.id, code, status);
       }
       toast.success("Invoice saved");
@@ -410,7 +481,7 @@ export function InvoiceEntry({ invoiceId: invoiceIdProp }: { invoiceId?: string 
                   <div>
                     <div className="text-sm font-bold tracking-tight">Bulk Import Excel</div>
                     <div className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
-                      Imports Date, Bill No, Name of Party, Quantity, and E-way Bill from the first
+                      Imports Date, Bill No, Name of Party, Quantity, E-way Bill, Inditex, and Textile Genesis from the first
                       worksheet.
                     </div>
                   </div>
@@ -447,11 +518,11 @@ export function InvoiceEntry({ invoiceId: invoiceIdProp }: { invoiceId?: string 
                       <div>
                         <div className="text-sm font-bold text-success">
                           {importResult.createdCount} invoice
-                          {importResult.createdCount === 1 ? "" : "s"} imported
+                          {importResult.createdCount === 1 ? "" : "s"} created, {importResult.updatedCount} updated
                           {importResult.failedCount ? `, ${importResult.failedCount} skipped` : ""}
                         </div>
                         <div className="mt-1 text-sm leading-6 text-muted-foreground">
-                          Imported invoices are now available in Pending Approvals.
+                          Imported invoices are now available in Pending Approvals or Approved based on the seven required documents.
                         </div>
                         {importResult.failedPreview.length > 0 && (
                           <div className="mt-2 text-xs text-muted-foreground">
@@ -554,6 +625,20 @@ export function InvoiceEntry({ invoiceId: invoiceIdProp }: { invoiceId?: string 
                   </PopoverContent>
                 </Popover>
               </Field>
+              <Field label="Inditex (Optional)">
+                <Input
+                  value={form.inditex}
+                  onChange={(e) => updateForm("inditex", e.target.value)}
+                  placeholder="Enter Inditex value"
+                />
+              </Field>
+              <Field label="Textile Genesis (Optional)">
+                <Input
+                  value={form.textileGenesis}
+                  onChange={(e) => updateForm("textileGenesis", e.target.value)}
+                  placeholder="Enter Textile Genesis value"
+                />
+              </Field>
               <div className="md:col-span-2">
                 <Field label="Remark">
                   <Textarea
@@ -623,7 +708,7 @@ export function InvoiceEntry({ invoiceId: invoiceIdProp }: { invoiceId?: string 
                 </div>
                 <div className="flex justify-between gap-4">
                   <span>Workflow</span>
-                  <span className="font-semibold text-foreground">Standard (7-doc)</span>
+                  <span className="font-semibold text-foreground">Standard (7-doc + 2-optional)</span>
                 </div>
               </div>
             </CardContent>
@@ -634,20 +719,53 @@ export function InvoiceEntry({ invoiceId: invoiceIdProp }: { invoiceId?: string 
           <CardHeader>
             <CardTitle className="text-lg">Document Verification Workflow</CardTitle>
             <CardDescription>
-              All documents default to <StatusBadge status="pending" /> on creation. Update each
-              status to advance the workflow.
+              <div className="space-y-2">
+                <p>Required documents (all must be approved for invoice approval):</p>
+                <p className="text-xs text-muted-foreground">All documents default to <StatusBadge status="pending" /> on creation. Update each
+                status to advance the workflow.</p>
+                <p className="text-xs font-semibold text-warning">Optional documents are displayed only if data exists in Excel. They do not affect the final approval status.</p>
+              </div>
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {DOCS.map((doc) => (
-                <DocCard
-                  key={doc.code}
-                  label={doc.label}
-                  status={docs[doc.code]}
-                  onChange={(s) => setStatus(doc.code, s)}
-                />
-              ))}
+            <div className="space-y-6">
+              {/* Required Documents */}
+              <div>
+                <h3 className="mb-3 text-sm font-semibold text-foreground">Required Documents (7)</h3>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {REQUIRED_DOCS.map((doc) => (
+                    <DocCard
+                      key={doc.code}
+                      label={doc.label}
+                      status={docs[doc.code]}
+                      onChange={(s) => setStatus(doc.code, s)}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Optional Documents - Only show if data exists */}
+              {Object.entries(optionalDocData).some(([_, hasData]) => hasData) && (
+                <div>
+                  <h3 className="mb-3 text-sm font-semibold text-foreground">Optional Documents</h3>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {OPTIONAL_DOCS.map((doc) => {
+                      const docKey = doc.code === "inditex" ? "inditex" : "textile_genesis";
+                      const hasData = optionalDocData[docKey];
+                      if (!hasData) return null;
+                      return (
+                        <DocCard
+                          key={doc.code}
+                          label={doc.label}
+                          status={docs[doc.code]}
+                          onChange={(s) => setStatus(doc.code, s)}
+                          optional={true}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -671,15 +789,20 @@ function DocCard({
   label,
   status,
   onChange,
+  optional,
 }: {
   label: string;
   status: DocStatus;
   onChange: (s: DocStatus) => void;
+  optional?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-border/75 bg-background/50 p-4 shadow-sm transition-all hover:border-primary/25 hover:bg-card hover:shadow-soft">
+    <div className={cn("rounded-2xl border bg-background/50 p-4 shadow-sm transition-all hover:border-primary/25 hover:bg-card hover:shadow-soft", optional && "border-dashed border-warning/30 bg-warning/5")}>
       <div className="flex items-center justify-between">
-        <div className="text-sm font-bold tracking-tight">{label}</div>
+        <div className="flex items-center gap-2">
+          <div className="text-sm font-bold tracking-tight">{label}</div>
+          {optional && <span className="text-xs font-semibold text-warning">Optional</span>}
+        </div>
         <StatusBadge status={status} />
       </div>
       <div className="mt-4 grid grid-cols-3 gap-1.5">
@@ -705,3 +828,5 @@ function DocCard({
     </div>
   );
 }
+
+

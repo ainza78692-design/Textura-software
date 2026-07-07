@@ -1,49 +1,101 @@
+import * as XLSX from "xlsx";
+import { REQUIRED_DOCUMENT_CODES } from "../domain/documents";
 import { ApiError } from "../middleware/api-error";
 import * as repo from "../repositories/invoice.repository";
-import type { DocStatus, DocumentCode, InvoiceInput } from "../types/domain";
+import type { AuthUser, DocStatus, DocumentCode, InvoiceInput } from "../types/domain";
 import { calculateFinalStatus } from "./invoice-status";
-import * as XLSX from "xlsx";
 
-export async function createInvoice(input: InvoiceInput, userId: string) {
-  return repo.createInvoice(input, userId);
+function scopeFor(user: AuthUser): repo.InvoiceScope {
+  return { userId: user.id, isTestUser: user.email.toLowerCase() === "testuser@textura.local" };
 }
 
-export async function bulkCreateInvoices(inputs: InvoiceInput[], userId: string) {
+async function recalculateInvoiceStatus(invoiceId: string, user: AuthUser) {
+  const scope = scopeFor(user);
+  const statuses = await repo.getRequiredDocumentStatuses(invoiceId, scope);
+  const finalStatus = calculateFinalStatus(statuses);
+  return repo.updateFinalStatus(invoiceId, finalStatus, user.id, scope);
+}
+
+async function createAndRecalculate(input: InvoiceInput, user: AuthUser) {
+  const invoice = await repo.createInvoice(input, user.id);
+  return (await recalculateInvoiceStatus(invoice.id, user)) ?? invoice;
+}
+
+function isUniqueInvoiceError(error: unknown) {
+  const code = typeof error === "object" && error !== null && "code" in error ? String((error as { code?: unknown }).code) : "";
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  return code === "23505" || message.includes("duplicate");
+}
+
+async function updateImportedInvoice(input: InvoiceInput, user: AuthUser) {
+  const scope = scopeFor(user);
+  const existing = await repo.getInvoiceByNumber(input.invoiceNumber, scope);
+  if (!existing) return null;
+
+  const updated = await repo.updateInvoice(existing.id, input, user.id, scope);
+  if (!updated) return null;
+
+  for (const code of REQUIRED_DOCUMENT_CODES) {
+    const status = input.documentStatuses?.[code];
+    if (!status) continue;
+    await repo.updateDocumentStatus(existing.id, code, { status }, user.id, scope);
+  }
+
+  return (await recalculateInvoiceStatus(existing.id, user)) ?? updated;
+}
+
+export async function createInvoice(input: InvoiceInput, user: AuthUser) {
+  return createAndRecalculate(input, user);
+}
+
+export async function bulkCreateInvoices(inputs: InvoiceInput[], user: AuthUser) {
   const created = [];
+  const updated = [];
   const failed: { row: number; invoiceNumber: string; customerName: string; reason: string }[] = [];
 
   for (const [index, input] of inputs.entries()) {
     try {
-      created.push(await repo.createInvoice(input, userId));
+      created.push(await createAndRecalculate(input, user));
     } catch (error) {
+      if (isUniqueInvoiceError(error)) {
+        const invoice = await updateImportedInvoice(input, user);
+        if (invoice) {
+          updated.push(invoice);
+          continue;
+        }
+      }
+
       const message = error instanceof Error ? error.message : "Unable to create invoice";
       failed.push({
         row: index + 1,
         invoiceNumber: input.invoiceNumber,
         customerName: input.customerName,
-        reason: message.includes("duplicate") ? "Invoice number already exists" : message,
+        reason: isUniqueInvoiceError(error)
+          ? "Invoice number already exists in another profile"
+          : message,
       });
     }
   }
 
-  return { created, failed };
+  return { created, updated, failed };
 }
 
-export async function updateInvoice(id: string, input: Partial<InvoiceInput>, userId: string) {
-  const invoice = await repo.updateInvoice(id, input, userId);
-  if (!invoice)
+export async function updateInvoice(id: string, input: Partial<InvoiceInput>, user: AuthUser) {
+  const invoice = await repo.updateInvoice(id, input, user.id, scopeFor(user));
+  if (!invoice) {
     throw new ApiError(404, "Invoice not found or already final-submitted", "INVOICE_NOT_EDITABLE");
+  }
   return invoice;
 }
 
-export async function deleteInvoice(id: string) {
-  const deleted = await repo.deleteInvoice(id);
+export async function deleteInvoice(id: string, user: AuthUser) {
+  const deleted = await repo.deleteInvoice(id, scopeFor(user));
   if (!deleted) throw new ApiError(404, "Invoice not found", "INVOICE_NOT_FOUND");
   return { deleted };
 }
 
-export async function deleteInvoices(ids: string[]) {
-  const deleted = await repo.deleteInvoices(ids);
+export async function deleteInvoices(ids: string[], user: AuthUser) {
+  const deleted = await repo.deleteInvoices(ids, scopeFor(user));
   return { deleted };
 }
 
@@ -51,33 +103,28 @@ export async function updateDocumentStatus(
   invoiceId: string,
   documentCode: DocumentCode,
   input: { status: DocStatus; remark?: string | null },
-  userId: string,
+  user: AuthUser,
 ) {
-  let invoice = await repo.updateDocumentStatus(invoiceId, documentCode, input, userId);
-  if (!invoice)
-    throw new ApiError(
-      404,
-      "Invoice document not found",
-      "DOCUMENT_NOT_EDITABLE",
-    );
-  
-  const statuses = await repo.getDocumentStatuses(invoiceId);
+  let invoice = await repo.updateDocumentStatus(invoiceId, documentCode, input, user.id, scopeFor(user));
+  if (!invoice) {
+    throw new ApiError(404, "Invoice document not found", "DOCUMENT_NOT_EDITABLE");
+  }
+
+  const statuses = await repo.getRequiredDocumentStatuses(invoiceId, scopeFor(user));
   const finalStatus = calculateFinalStatus(statuses);
-  invoice = (await repo.updateFinalStatus(invoiceId, finalStatus, userId)) ?? invoice;
-  
+  invoice = (await repo.updateFinalStatus(invoiceId, finalStatus, user.id, scopeFor(user))) ?? invoice;
+
   return invoice;
 }
 
-
-
-export async function getInvoice(id: string) {
-  const invoice = await repo.getInvoiceById(id);
+export async function getInvoice(id: string, user: AuthUser) {
+  const invoice = await repo.getInvoiceById(id, undefined, scopeFor(user));
   if (!invoice) throw new ApiError(404, "Invoice not found", "INVOICE_NOT_FOUND");
   return invoice;
 }
 
-export async function listInvoices(filters: Parameters<typeof repo.listInvoices>[0]) {
-  return repo.listInvoices(filters);
+export async function listInvoices(filters: Parameters<typeof repo.listInvoices>[0], user: AuthUser) {
+  return repo.listInvoices(filters, scopeFor(user));
 }
 
 function pad(value: number) {
@@ -105,14 +152,17 @@ function formatDateTime(value: unknown) {
 
 export async function exportInvoicesWorkbook(
   filters: Parameters<typeof repo.listInvoicesForExport>[0],
+  user: AuthUser,
 ) {
-  const rows = await repo.listInvoicesForExport(filters);
+  const rows = await repo.listInvoicesForExport(filters, scopeFor(user));
   const headers = [
     "Customer Name",
     "Invoice Number",
     "E-way Bill",
     "Quantity (Meters)",
     "Count Construction",
+    "Inditex",
+    "Textile Genesis",
     "Remark",
     "Invoice Date",
     "Final Status",
@@ -126,6 +176,8 @@ export async function exportInvoicesWorkbook(
     "Count Construction Status",
     "MBS Status",
     "TC Document Status",
+    "Inditex Status",
+    "Textile Genesis Status",
     "Created At",
     "Updated At",
   ];
@@ -136,6 +188,8 @@ export async function exportInvoicesWorkbook(
     "E-way Bill": row.eway_bill ?? "",
     "Quantity (Meters)": row.quantity_meters ?? "",
     "Count Construction": row.count_construction ?? "",
+    Inditex: row.inditex ?? "",
+    "Textile Genesis": row.textile_genesis ?? "",
     Remark: row.remark ?? "",
     "Invoice Date": formatDateOnly(row.invoice_date),
     "Final Status": row.final_status ?? "",
@@ -149,6 +203,8 @@ export async function exportInvoicesWorkbook(
     "Count Construction Status": row.count_construction_status ?? "",
     "MBS Status": row.mbs_status ?? "",
     "TC Document Status": row.tc_status_doc ?? "",
+    "Inditex Status": row.inditex_status ?? "",
+    "Textile Genesis Status": row.textile_genesis_status ?? "",
     "Created At": formatDateTime(row.created_at),
     "Updated At": formatDateTime(row.updated_at),
   }));

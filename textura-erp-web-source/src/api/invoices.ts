@@ -36,6 +36,7 @@ export function createInvoice(input: InvoiceInput) {
 export function bulkCreateInvoices(invoices: InvoiceInput[]) {
   return apiRequest<{
     created: Invoice[];
+    updated: Invoice[];
     failed: { row: number; invoiceNumber: string; customerName: string; reason: string }[];
   }>("/invoices/bulk", {
     method: "POST",
