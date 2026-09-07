@@ -1,0 +1,60 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Textura ERP" Manufacturer="Textura ERP" Version="$(var.Version)" UpgradeCode="72a5b486-0925-4c07-ba71-6c483f9e2365">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    
+    <!-- Specify the media template so cab files are embedded inside the MSI -->
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="Main">
+      <ComponentGroupRef Id="AppFiles" />
+      <ComponentRef Id="ApplicationShortcut" />
+      <ComponentRef Id="ApplicationShortcutDesktop" />
+    </Feature>
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Textura ERP" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="Textura ERP" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="DesktopFolder" />
+
+    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
+      <!-- WiX v4/v5 modern wildcard file harvesting. This removes the need for heat.exe! -->
+      <Files Include="..\..\release\electron\win-unpacked\**" />
+    </ComponentGroup>
+
+    <!-- Start Menu Shortcut -->
+    <DirectoryRef Id="ApplicationProgramsFolder">
+      <Component Id="ApplicationShortcut" Guid="85918e7e-3c5e-4c74-a09c-2f3b92d8f946">
+        <Shortcut Id="ApplicationStartMenuShortcut" 
+                  Name="Textura ERP" 
+                  Description="Textura ERP Client"
+                  Target="[INSTALLFOLDER]Textura ERP.exe"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="AppIcon.ico" />
+        <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\TexturaERP" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <!-- Desktop Shortcut -->
+    <DirectoryRef Id="DesktopFolder">
+      <Component Id="ApplicationShortcutDesktop" Guid="d83c27f1-7fb1-432a-bc91-38f323c6f2a7">
+        <Shortcut Id="ApplicationDesktopShortcut"
+                  Name="Textura ERP"
+                  Description="Textura ERP Client"
+                  Target="[INSTALLFOLDER]Textura ERP.exe"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="AppIcon.ico" />
+        <RegistryValue Root="HKCU" Key="Software\TexturaERP" Name="desktop" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <!-- Define the main application icon and link it to Add/Remove Programs -->
+    <Icon Id="AppIcon.ico" SourceFile="..\..\build\icon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
+  </Package>
+</Wix>

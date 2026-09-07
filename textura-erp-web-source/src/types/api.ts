@@ -65,6 +65,14 @@ export interface Invoice {
   updated_at: string;
   documents?: InvoiceDocument[];
   documents_summary?: PendingDocumentSummary[];
+  // Denier / fabric-spec fields
+  count_1?: string | null;
+  denier_outward_1?: number | null;
+  count_2?: string | null;
+  denier_outward_2?: number | null;
+  gsm?: number | null;
+  width?: number | null;
+  net_weight?: number | null;
 }
 
 export interface InvoiceInput {
@@ -78,6 +86,14 @@ export interface InvoiceInput {
   documentStatuses?: Partial<Record<DocumentCode, DocStatus>>;
   remark?: string | null;
   invoiceDate?: string | null;
+  // Denier / fabric-spec fields
+  count1?: string | null;
+  denierOutward1?: number | null;
+  count2?: string | null;
+  denierOutward2?: number | null;
+  gsm?: number | null;
+  width?: number | null;
+  netWeight?: number | null;
 }
 
 export interface InvoiceSearchParams {

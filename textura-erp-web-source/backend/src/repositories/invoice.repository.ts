@@ -93,9 +93,11 @@ export async function createInvoice(input: InvoiceInput, userId: string) {
       `insert into invoices (
         customer_name, invoice_number, eway_bill, grs_number, po_number,
         quantity_meters, count_construction, mbs, tc_status, inditex, textile_genesis,
-        remark, invoice_date, created_by, updated_by
+        remark, invoice_date,
+        count_1, denier_outward_1, count_2, denier_outward_2, gsm, width, net_weight,
+        created_by, updated_by
       )
-      values ($1,$2,$3,null,null,$4,$5,null,null,$6,$7,$8,$9,$10,$10)
+      values ($1,$2,$3,null,null,$4,$5,null,null,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$17)
       returning *`,
       [
         input.customerName,
@@ -107,6 +109,13 @@ export async function createInvoice(input: InvoiceInput, userId: string) {
         blankToNull(input.textileGenesis),
         blankToNull(input.remark),
         input.invoiceDate ?? null,
+        blankToNull(input.count1),
+        input.denierOutward1 ?? null,
+        blankToNull(input.count2),
+        input.denierOutward2 ?? null,
+        input.gsm ?? null,
+        input.width ?? null,
+        input.netWeight ?? null,
         userId,
       ],
     );
@@ -157,6 +166,21 @@ export async function updateInvoice(
       blankToNull(input.inditex),
       Object.prototype.hasOwnProperty.call(input, "textileGenesis"),
       blankToNull(input.textileGenesis),
+      // Denier / fabric-spec fields
+      Object.prototype.hasOwnProperty.call(input, "count1"),
+      blankToNull(input.count1),
+      Object.prototype.hasOwnProperty.call(input, "denierOutward1"),
+      input.denierOutward1 ?? null,
+      Object.prototype.hasOwnProperty.call(input, "count2"),
+      blankToNull(input.count2),
+      Object.prototype.hasOwnProperty.call(input, "denierOutward2"),
+      input.denierOutward2 ?? null,
+      Object.prototype.hasOwnProperty.call(input, "gsm"),
+      input.gsm ?? null,
+      Object.prototype.hasOwnProperty.call(input, "width"),
+      input.width ?? null,
+      Object.prototype.hasOwnProperty.call(input, "netWeight"),
+      input.netWeight ?? null,
       userId,
     ];
     const where = ["id = $1"];
@@ -173,7 +197,14 @@ export async function updateInvoice(
         invoice_date = coalesce($8, invoice_date),
         inditex = case when $9::boolean then $10 else inditex end,
         textile_genesis = case when $11::boolean then $12 else textile_genesis end,
-        updated_by = $13
+        count_1 = case when $13::boolean then $14 else count_1 end,
+        denier_outward_1 = case when $15::boolean then $16 else denier_outward_1 end,
+        count_2 = case when $17::boolean then $18 else count_2 end,
+        denier_outward_2 = case when $19::boolean then $20 else denier_outward_2 end,
+        gsm = case when $21::boolean then $22 else gsm end,
+        width = case when $23::boolean then $24 else width end,
+        net_weight = case when $25::boolean then $26 else net_weight end,
+        updated_by = $27
        where ${where.join(" and ")}
        returning *`,
       values,
@@ -490,6 +521,13 @@ export async function listInvoicesForExport(filters: Parameters<typeof listInvoi
       i.final_submitted_at,
       i.created_at,
       i.updated_at,
+      i.count_1,
+      i.denier_outward_1,
+      i.count_2,
+      i.denier_outward_2,
+      i.gsm,
+      i.width,
+      i.net_weight,
       creator.full_name as created_by_name,
       updater.full_name as updated_by_name,
       max(case when d.document_code = 'invoice' then d.status::text end) as invoice_doc_status,

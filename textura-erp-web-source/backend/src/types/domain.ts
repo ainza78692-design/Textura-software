@@ -33,4 +33,12 @@ export interface InvoiceInput {
   documentStatuses?: Partial<Record<DocumentCode, DocStatus>>;
   remark?: string | null;
   invoiceDate?: string | null;
+  // Denier / fabric-spec fields (imported from the sale-register Excel)
+  count1?: string | null;
+  denierOutward1?: number | null;
+  count2?: string | null;
+  denierOutward2?: number | null;
+  gsm?: number | null;
+  width?: number | null;
+  netWeight?: number | null;
 }

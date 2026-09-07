@@ -27,7 +27,7 @@ function resolveUpdateUrl(serverOrigin, value) {
   return new URL(value, `${updateOrigin.replace(/\/+$/, "")}/`).toString();
 }
 
-function downloadFile(url, destination, { maxRetries = 5, timeoutMs = 10 * 60 * 1000 } = {}) {
+function downloadFile(url, destination, { maxRetries = 5, timeoutMs = 60 * 60 * 1000 } = {}) {
   // Use Node's native http/https for reliable large file downloads.
   // Electron's net.request swallows ERR_CONTENT_LENGTH_MISMATCH silently,
   // so we use the lower-level Node modules which properly surface stream errors.

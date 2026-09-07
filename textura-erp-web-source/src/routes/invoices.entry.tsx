@@ -99,6 +99,14 @@ const FIELD_ALIASES = {
   countConstructionDoc: ["count construction"],
   mbsDoc: ["mbs"],
   tcDoc: ["tc"],
+  // Denier / fabric-spec fields
+  count1: ["count 1", "count1", "denier 1", "denier1"],
+  denierOutward1: ["denier outward 1", "denieroutward1", "denier out 1", "outward 1"],
+  count2: ["count 2", "count2", "denier 2", "denier2"],
+  denierOutward2: ["denier outward 2", "denieroutward2", "denier out 2", "outward 2"],
+  gsm: ["gsm", "grams per sqm", "grams per square meter"],
+  width: ["width", "width (inch)", "width inch"],
+  netWeight: ["net weight", "net weight (kg)", "netweight", "net wt", "net wt."],
 } as const;
 
 type ExcelField = keyof typeof FIELD_ALIASES;
@@ -155,6 +163,13 @@ function headerMatches(field: ExcelField, header: string, aliases: string[]) {
   if (field === "inditex") return header.includes("inditex");
   if (field === "textileGenesis")
     return header.includes("textile") && header.includes("genesis");
+  if (field === "count1") return header === "count1" || header === "count1denier";
+  if (field === "count2") return header === "count2" || header === "count2denier";
+  if (field === "denierOutward1") return header.includes("outward") && (header.includes("1") || header.includes("one"));
+  if (field === "denierOutward2") return header.includes("outward") && (header.includes("2") || header.includes("two"));
+  if (field === "gsm") return header === "gsm";
+  if (field === "width") return header === "width" || header === "widthinch";
+  if (field === "netWeight") return header === "netweight" || header === "netwt" || (header.includes("net") && header.includes("weight"));
   return false;
 }
 
@@ -196,6 +211,12 @@ function detectHeader(rows: ExcelRow[]) {
   };
 }
 
+function toNumber(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 function parseInvoiceRows(rows: ExcelRow[]) {
   const header = detectHeader(rows);
   const invoices: InvoiceInput[] = [];
@@ -213,6 +234,23 @@ function parseInvoiceRows(rows: ExcelRow[]) {
       header.columns.inditex == null ? null : cellText(row[header.columns.inditex]);
     const textileGenesis =
       header.columns.textileGenesis == null ? null : cellText(row[header.columns.textileGenesis]);
+
+    // Denier / fabric-spec fields
+    const count1 =
+      header.columns.count1 == null ? null : cellText(row[header.columns.count1]) || null;
+    const denierOutward1 =
+      header.columns.denierOutward1 == null ? null : toNumber(row[header.columns.denierOutward1]);
+    const count2 =
+      header.columns.count2 == null ? null : cellText(row[header.columns.count2]) || null;
+    const denierOutward2 =
+      header.columns.denierOutward2 == null ? null : toNumber(row[header.columns.denierOutward2]);
+    const gsm =
+      header.columns.gsm == null ? null : toNumber(row[header.columns.gsm]);
+    const width =
+      header.columns.width == null ? null : toNumber(row[header.columns.width]);
+    const netWeight =
+      header.columns.netWeight == null ? null : toNumber(row[header.columns.netWeight]);
+
     const documentStatuses = Object.fromEntries(
       REQUIRED_WORKFLOW_FIELDS.map(([field, code]) => [
         code,
@@ -232,6 +270,13 @@ function parseInvoiceRows(rows: ExcelRow[]) {
       inditex: inditex || null,
       textileGenesis: textileGenesis || null,
       documentStatuses,
+      count1,
+      denierOutward1,
+      count2,
+      denierOutward2,
+      gsm,
+      width,
+      netWeight,
     });
   }
 
@@ -481,7 +526,8 @@ export function InvoiceEntry({ invoiceId: invoiceIdProp }: { invoiceId?: string 
                   <div>
                     <div className="text-sm font-bold tracking-tight">Bulk Import Excel</div>
                     <div className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
-                      Imports Date, Bill No, Name of Party, Quantity, E-way Bill, Inditex, and Textile Genesis from the first
+                      Imports Date, Bill No, Name of Party, Quantity, E-way Bill, Inditex, Textile Genesis,
+                      Count 1, Denier Outward 1, Count 2, Denier Outward 2, GSM, Width, and Net Weight from the first
                       worksheet.
                     </div>
                   </div>

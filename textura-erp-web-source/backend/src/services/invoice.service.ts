@@ -155,11 +155,13 @@ export async function exportInvoicesWorkbook(
   user: AuthUser,
 ) {
   const rows = await repo.listInvoicesForExport(filters, scopeFor(user));
+
   const headers = [
     "Customer Name",
     "Invoice Number",
     "E-way Bill",
     "Quantity (Meters)",
+    "Net Weight (kg)",
     "Count Construction",
     "Inditex",
     "Textile Genesis",
@@ -180,13 +182,21 @@ export async function exportInvoicesWorkbook(
     "Textile Genesis Status",
     "Created At",
     "Updated At",
+    "Count 1 (Denier)",
+    "Denier Outward 1 (kg)",
+    "Count 2 (Denier)",
+    "Denier Outward 2 (kg)",
+    "GSM",
+    "Width",
   ];
 
+  // --- Per-row data ---
   const worksheetRows = rows.map((row) => ({
     "Customer Name": row.customer_name ?? "",
     "Invoice Number": row.invoice_number ?? "",
     "E-way Bill": row.eway_bill ?? "",
     "Quantity (Meters)": row.quantity_meters ?? "",
+    "Net Weight (kg)": row.net_weight ?? "",
     "Count Construction": row.count_construction ?? "",
     Inditex: row.inditex ?? "",
     "Textile Genesis": row.textile_genesis ?? "",
@@ -207,10 +217,60 @@ export async function exportInvoicesWorkbook(
     "Textile Genesis Status": row.textile_genesis_status ?? "",
     "Created At": formatDateTime(row.created_at),
     "Updated At": formatDateTime(row.updated_at),
+    "Count 1 (Denier)": row.count_1 ?? "",
+    "Denier Outward 1 (kg)": row.denier_outward_1 ?? "",
+    "Count 2 (Denier)": row.count_2 ?? "",
+    "Denier Outward 2 (kg)": row.denier_outward_2 ?? "",
+    GSM: row.gsm ?? "",
+    Width: row.width ?? "",
   }));
 
+  // --- Denier Outward Summary Aggregation ---
+  // Aggregate outward kg per unique denier type across both Count 1 and Count 2
+  const denierTotals = new Map<string, number>();
+  for (const row of rows) {
+    if (row.count_1 && row.denier_outward_1 != null) {
+      const key = String(row.count_1).trim().toUpperCase();
+      denierTotals.set(key, (denierTotals.get(key) ?? 0) + Number(row.denier_outward_1));
+    }
+    if (row.count_2 && row.denier_outward_2 != null) {
+      const key = String(row.count_2).trim().toUpperCase();
+      denierTotals.set(key, (denierTotals.get(key) ?? 0) + Number(row.denier_outward_2));
+    }
+  }
+
+  // Build the final sheet rows: data rows + blank separator + summary rows
+  type SheetRow = Record<string, string | number>;
+  const allRows: SheetRow[] = [...worksheetRows];
+
+  if (denierTotals.size > 0) {
+    // Blank separator row
+    allRows.push(Object.fromEntries(headers.map((h) => [h, ""])));
+
+    // Header row for the summary section
+    const summaryHeader: SheetRow = Object.fromEntries(headers.map((h) => [h, ""]));
+    summaryHeader["Customer Name"] = "── DENIER OUTWARD SUMMARY ──";
+    summaryHeader["Invoice Number"] = "Denier";
+    summaryHeader["E-way Bill"] = "Total Outward (kg)";
+    allRows.push(summaryHeader);
+
+    // One row per unique denier (sorted: 70D, 150D, 300D, etc.)
+    const sorted = [...denierTotals.entries()].sort(([a], [b]) => {
+      const numA = parseInt(a, 10) || 0;
+      const numB = parseInt(b, 10) || 0;
+      return numA - numB;
+    });
+
+    for (const [denier, totalKg] of sorted) {
+      const summaryRow: SheetRow = Object.fromEntries(headers.map((h) => [h, ""]));
+      summaryRow["Invoice Number"] = denier;
+      summaryRow["E-way Bill"] = Math.round(totalKg * 10000) / 10000; // 4 decimal places
+      allRows.push(summaryRow);
+    }
+  }
+
   const workbook = XLSX.utils.book_new();
-  const worksheet = XLSX.utils.json_to_sheet(worksheetRows, { header: headers });
+  const worksheet = XLSX.utils.json_to_sheet(allRows, { header: headers });
   worksheet["!cols"] = headers.map((header) => ({ wch: Math.max(14, header.length + 2) }));
   XLSX.utils.book_append_sheet(workbook, worksheet, "Invoices");
 
