@@ -214,7 +214,11 @@ function detectHeader(rows: ExcelRow[]) {
 
 function toNumber(value: unknown): number | null {
   if (value == null || value === "") return null;
-  const n = Number(value);
+  // Convert to string, remove commas, letters (like D for Denier), spaces, etc.
+  // We keep digits, dots, and minus signs.
+  const str = String(value).replace(/[^0-9.-]/g, "");
+  if (str === "") return null;
+  const n = Number(str);
   return Number.isFinite(n) ? n : null;
 }
 
