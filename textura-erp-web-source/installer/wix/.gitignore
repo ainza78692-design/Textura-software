@@ -1,0 +1,4 @@
+# Compiled MSI output - never commit these, they are large binary files
+*.msi
+*.wixpdb
+*.wixobj
