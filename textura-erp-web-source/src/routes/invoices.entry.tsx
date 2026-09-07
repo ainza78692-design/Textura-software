@@ -145,7 +145,8 @@ function toIsoDate(value: unknown) {
   return Number.isNaN(parsed.getTime()) ? null : format(parsed, "yyyy-MM-dd");
 }
 
-function headerMatches(field: ExcelField, header: string, aliases: string[]) {
+function headerMatches(field: ExcelField, rawHeader: string, aliases: string[]) {
+  const header = rawHeader.trim().replace(/\s+/g, ' '); // Normalize spaces
   if (aliases.includes(header)) return true;
   if (field === "ewayBill") return header.includes("eway") || header.includes("ewb");
   if (field === "invoiceNumber")
@@ -163,13 +164,13 @@ function headerMatches(field: ExcelField, header: string, aliases: string[]) {
   if (field === "inditex") return header.includes("inditex");
   if (field === "textileGenesis")
     return header.includes("textile") && header.includes("genesis");
-  if (field === "count1") return header === "count1" || header === "count1denier";
-  if (field === "count2") return header === "count2" || header === "count2denier";
+  if (field === "count1") return header === "count 1" || header === "count1" || header === "count1denier";
+  if (field === "count2") return header === "count 2" || header === "count2" || header === "count2denier";
   if (field === "denierOutward1") return header.includes("outward") && (header.includes("1") || header.includes("one"));
   if (field === "denierOutward2") return header.includes("outward") && (header.includes("2") || header.includes("two"));
   if (field === "gsm") return header === "gsm";
   if (field === "width") return header === "width" || header === "widthinch";
-  if (field === "netWeight") return header === "netweight" || header === "netwt" || (header.includes("net") && header.includes("weight"));
+  if (field === "netWeight") return header === "net weight" || header === "netweight" || header === "netwt" || (header.includes("net") && header.includes("weight"));
   return false;
 }
 
