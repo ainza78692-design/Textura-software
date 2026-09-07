@@ -88,6 +88,17 @@ async function syncOptionalDocuments(
 }
 
 export async function createInvoice(input: InvoiceInput, userId: string) {
+  console.log("[DEBUG] createInvoice payload:", JSON.stringify({
+    invoice_number: input.invoiceNumber,
+    count1: input.count1,
+    denierOutward1: input.denierOutward1,
+    count2: input.count2,
+    denierOutward2: input.denierOutward2,
+    gsm: input.gsm,
+    width: input.width,
+    netWeight: input.netWeight
+  }));
+
   return transaction(async (client) => {
     const invoice = await client.query(
       `insert into invoices (
@@ -152,6 +163,16 @@ export async function updateInvoice(
   userId: string,
   scope?: InvoiceScope,
 ) {
+  console.log("[DEBUG] updateInvoice payload for id", id, ":", JSON.stringify({
+    count1: input.count1,
+    denierOutward1: input.denierOutward1,
+    count2: input.count2,
+    denierOutward2: input.denierOutward2,
+    gsm: input.gsm,
+    width: input.width,
+    netWeight: input.netWeight
+  }));
+
   return transaction(async (client) => {
     const values: unknown[] = [
       id,
