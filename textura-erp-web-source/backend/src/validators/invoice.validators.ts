@@ -24,7 +24,14 @@ export const invoiceInputSchema = z.object({
   textileGenesis: z.string().trim().max(180).nullish(),
   documentStatuses: z.record(documentCodeSchema, docStatusSchema).optional(),
   remark: z.string().trim().max(2000).nullish(),
-  invoiceDate: z.string().date().nullish()
+  invoiceDate: z.string().date().nullish(),
+  count1: z.string().trim().max(180).nullish(),
+  denierOutward1: z.number().nullish(),
+  count2: z.string().trim().max(180).nullish(),
+  denierOutward2: z.number().nullish(),
+  gsm: z.number().nullish(),
+  width: z.number().nullish(),
+  netWeight: z.number().nullish()
 });
 
 export const updateInvoiceSchema = invoiceInputSchema.partial();
